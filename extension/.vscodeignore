@@ -1,0 +1,18 @@
+# sources & build inputs (we ship compiled out/ only)
+src/**
+test/**
+tsconfig.json
+.vscode/**
+.vscode-test/**
+**/*.map
+**/*.ts
+!out/**/*.js
+
+# dev noise
+node_modules/**
+.gitignore
+.eslintrc*
+*.log
+.DS_Store
+
+# keep: out/, media/ (template + vendored cytoscape), package.json, README.md, LICENSE

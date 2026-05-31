@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>netscope · __NETSCOPE_TITLE__</title>
+<style>
+  :root {
+    --bg:        #06080c;
+    --bg-2:      #0a0e15;
+    --ink:       #e8eef2;
+    --ink-dim:   #6b7888;
+    --grid:      rgba(120, 160, 200, 0.045);
+    --hair:      rgba(140, 170, 210, 0.12);
+    --pipeline:  #8aa0b8;
+    --stage:     #22d3ee;
+    --model:     #34d399;
+    --module:    #f5b942;
+    --op:        #b98aff;
+    --mono: "SFMono-Regular","SF Mono","JetBrains Mono","Fira Code",ui-monospace,Menlo,Consolas,monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: var(--mono); -webkit-font-smoothing: antialiased; overflow: hidden; }
+
+  /* layered instrument-panel backdrop */
+  #stage { position: absolute; inset: 0;
+    background:
+      radial-gradient(1200px 700px at 70% -10%, rgba(34,211,238,0.06), transparent 60%),
+      radial-gradient(900px 600px at 10% 110%, rgba(52,211,153,0.05), transparent 60%),
+      linear-gradient(180deg, var(--bg-2), var(--bg) 70%); }
+  #stage::before { content:""; position:absolute; inset:0; pointer-events:none;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 34px 34px; mask-image: radial-gradient(circle at 50% 45%, #000 55%, transparent 100%); }
+  #stage::after { content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 3px); }
+
+  #cy { position:absolute; inset:0; background: transparent; z-index:1; }
+
+  /* top HUD */
+  #hud { position:absolute; z-index:3; top:0; left:0; right:0; height:46px;
+    display:flex; align-items:center; gap:14px; padding:0 16px;
+    background: linear-gradient(180deg, rgba(8,11,17,0.92), rgba(8,11,17,0.35) 70%, transparent);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .brand { font-weight:700; letter-spacing:.42em; font-size:12px; color:var(--ink);
+    text-transform:uppercase; }
+  .brand b { color: var(--stage); }
+  .title { font-size:12px; color:var(--ink-dim); letter-spacing:.06em; }
+  .live { display:flex; align-items:center; gap:6px; font-size:10.5px; color:var(--model);
+    text-transform:uppercase; letter-spacing:.18em; margin-left:auto; }
+  .live .dot { width:7px; height:7px; border-radius:50%; background:var(--model);
+    box-shadow:0 0 10px var(--model); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1; transform:scale(1)} 50%{opacity:.35; transform:scale(.7)} }
+
+  /* legend */
+  #legend { position:absolute; z-index:3; left:16px; bottom:14px; display:flex; flex-wrap:wrap;
+    gap:7px 14px; padding:10px 12px; max-width:60vw;
+    background: rgba(10,14,21,0.74); border:1px solid var(--hair); border-radius:10px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .lg { display:flex; align-items:center; gap:7px; font-size:10.5px; color:var(--ink-dim);
+    text-transform:uppercase; letter-spacing:.13em; }
+  .lg i { width:9px; height:9px; border-radius:3px; display:inline-block; }
+  .hint { position:absolute; z-index:3; right:16px; bottom:16px; font-size:10.5px;
+    color:var(--ink-dim); letter-spacing:.08em; text-transform:uppercase; opacity:.7; }
+
+  /* mismatch warnings */
+  .warnpill { display:none; align-items:center; gap:5px; font-size:11px; font-weight:700;
+    letter-spacing:.1em; color:#ff5a5f; border:1px solid #ff5a5f55; background:#ff5a5f18;
+    border-radius:999px; padding:4px 10px; cursor:pointer; }
+  .warnpill.show { display:inline-flex; }
+  .warnpill:hover { background:#ff5a5f2e; }
+  #warnbox { position:absolute; z-index:4; right:14px; top:54px; width:320px; display:none;
+    flex-direction:column; gap:7px; max-height:46vh; overflow:auto;
+    background:rgba(20,9,11,0.96); border:1px solid #ff5a5f44; border-radius:12px; padding:12px;
+    box-shadow:0 18px 50px rgba(0,0,0,0.6); }
+  #warnbox.show { display:flex; }
+  #warnbox .wtitle { font-size:11px; text-transform:uppercase; letter-spacing:.16em; color:#ff9a9d; }
+  .witem { font-size:11.5px; color:#ffd7d8; line-height:1.5; border-top:1px solid #ff5a5f22;
+    padding-top:7px; cursor:pointer; }
+  .witem:hover { color:#fff; }
+
+  /* detail panel */
+  #panel { position:absolute; z-index:4; top:58px; right:14px; width:288px;
+    transform: translateX(120%); transition: transform .32s cubic-bezier(.2,.8,.2,1);
+    background: linear-gradient(180deg, rgba(13,18,27,0.97), rgba(9,12,19,0.97));
+    border:1px solid var(--hair); border-radius:14px; padding:16px 16px 18px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04); }
+  #panel.open { transform: translateX(0); }
+  #panel .pname { font-size:15px; font-weight:700; letter-spacing:.02em; margin-bottom:9px;
+    word-break:break-word; }
+  .badge { display:inline-block; font-size:10px; text-transform:uppercase; letter-spacing:.16em;
+    padding:3px 9px; border-radius:999px; border:1px solid currentColor; }
+  .rows { margin-top:13px; display:grid; grid-template-columns:auto 1fr; gap:6px 12px;
+    font-size:11.5px; }
+  .rows .k { color:var(--ink-dim); text-transform:uppercase; letter-spacing:.1em; }
+  .rows .v { color:var(--ink); text-align:right; word-break:break-word; }
+  #panel .loc { margin-top:14px; font-size:11px; color:var(--stage); cursor:pointer;
+    border-top:1px solid var(--hair); padding-top:11px; letter-spacing:.04em; }
+  #panel .loc:hover { text-decoration:underline; }
+  .pclose { position:absolute; top:11px; right:13px; color:var(--ink-dim); cursor:pointer;
+    font-size:15px; line-height:1; }
+  .pclose:hover { color:var(--ink); }
+
+  /* HUD buttons (expand/collapse all) */
+  .hbtns { display:flex; gap:6px; margin-left:auto; }
+  .hbtn { font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--ink-dim); background:rgba(255,255,255,0.03); border:1px solid var(--hair);
+    border-radius:7px; padding:5px 10px; cursor:pointer; transition:all .14s; }
+  .hbtn:hover { color:var(--stage); border-color:var(--stage); background:rgba(34,211,238,0.08); }
+  #hud .live { margin-left:0; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="cy"></div>
+<canvas id="fx"></canvas>
+
+<div id="hud">
+  <span class="brand"><b>net</b>scope</span>
+  <span class="title">__NETSCOPE_TITLE__</span>
+  <span class="hbtns">
+    <button class="hbtn" id="btn-expand">⊕ expand all</button>
+    <button class="hbtn" id="btn-collapse">⊖ collapse all</button>
+  </span>
+  <span class="warnpill" id="warnpill" title="shape mismatches">⚠ <span id="warncount">0</span></span>
+  <span class="live"><span class="dot"></span> tracing</span>
+</div>
+
+<div id="warnbox"></div>
+<div id="legend"></div>
+<div class="hint">scroll · zoom &nbsp;|&nbsp; drag · pan &nbsp;|&nbsp; click · inspect &nbsp;|&nbsp; [+] · expand block</div>
+
+<div id="panel"><span class="pclose" id="pclose">×</span><div id="panel-body"></div></div>
+
+__NETSCOPE_VENDOR__
+<script>
+const NETSCOPE_ELEMENTS = __NETSCOPE_ELEMENTS__;
+const KIND = { pipeline:"#8aa0b8", stage:"#22d3ee", model:"#34d399", module:"#f5b942", op:"#b98aff" };
+const KIND_DK = { pipeline:"#1a2330", stage:"#06303a", model:"#063528", module:"#3a2b08", op:"#241640" };
+const vscode = (typeof acquireVsCodeApi === "function") ? acquireVsCodeApi() : null;
+
+function shade(kind){ return KIND[kind] || "#5a6b7e"; }
+const FONT = '"SFMono-Regular","SF Mono","JetBrains Mono","Fira Code",ui-monospace,Menlo,Consolas,monospace';
+
+const cy = cytoscape({
+  container: document.getElementById("cy"),
+  elements: NETSCOPE_ELEMENTS,
+  wheelSensitivity: 0.2,
+  minZoom: 0.2, maxZoom: 3,
+  style: [
+    // leaf nodes: dark glassy chip with a per-kind phosphor underlay-glow
+    { selector: "node", style: {
+        "label": "data(label)", "font-family": FONT, "font-size": 11,
+        "color": "#eef4f8", "text-valign": "center", "text-halign": "center",
+        "text-wrap": "wrap", "text-max-width": 132,
+        "shape": "round-rectangle",
+        "width":  (e)=> { const ls = String(e.data("label")||e.data("name")||"").split("\n");
+                          const c = ls.reduce((m,s)=> Math.max(m, s.length), 1);
+                          return Math.max(46, Math.min(168, c*7.4 + 24)); },
+        "height": (e)=> { const n = String(e.data("label")||"").split("\n").length;
+                          return n*16 + 18; },
+        "background-color": (e)=> KIND_DK[e.data("kind")] || "#10161f", "background-opacity": 0.95,
+        "border-width": 1.3, "border-color": (e)=> shade(e.data("kind")), "border-opacity": 0.9,
+        "underlay-color": (e)=> shade(e.data("kind")),
+        "underlay-opacity": 0.18, "underlay-padding": 7, "underlay-shape": "round-rectangle",
+        "transition-property": "underlay-opacity underlay-padding border-width",
+        "transition-duration": "140ms" } },
+
+    // compound containers (stages that hold modules) — BORDER ONLY, no fill and
+    // no underlay glow. Nested compounds would otherwise stack translucent fills
+    // and the accumulated alpha washes deep models orange. Outline-only keeps any
+    // depth readable as clean nested frames.
+    { selector: ":parent", style: {
+        "background-opacity": 0,
+        "border-width": 1.2, "border-color": (e)=> shade(e.data("kind")), "border-opacity": 0.55,
+        "label": "data(name)", "text-valign": "top", "text-halign": "center",
+        "text-margin-y": -6, "font-family": FONT, "font-size": 10, "text-transform": "uppercase",
+        "color": (e)=> shade(e.data("kind")), "padding": "18px" } },
+
+    // edges: gradient source-kind -> target-kind, dashed for the marching pulse
+    { selector: "edge", style: {
+        "width": 2.2, "curve-style": "unbundled-bezier",
+        "line-fill": "linear-gradient",
+        "line-gradient-stop-colors": (e)=> shade(e.source().data("kind")) + " " + shade(e.target().data("kind")),
+        "line-gradient-stop-positions": "0 100",
+        "line-style": "dashed", "line-dash-pattern": [3, 7], "line-cap": "round",
+        "target-arrow-shape": "triangle", "target-arrow-fill": "filled",
+        "target-arrow-color": (e)=> shade(e.target().data("kind")),
+        "arrow-scale": 0.95, "opacity": 0.9,
+        "label": "data(label)", "font-family": FONT, "font-size": 9,
+        "color": "#9fb4c4", "text-background-color": "#06080c",
+        "text-background-opacity": 0.85, "text-background-padding": 3,
+        "text-background-shape": "round-rectangle" } },
+
+    { selector: "node.hi", style: {
+        "underlay-opacity": 0.5, "underlay-padding": 12, "border-width": 2.2, "z-index": 99 } },
+    { selector: "node:selected", style: {
+        "border-width": 2.4, "border-color": "#ffffff", "border-opacity": 0.95,
+        "underlay-opacity": 0.55, "underlay-padding": 12 } },
+    { selector: ".dim", style: { "opacity": 0.18 } },
+    { selector: "edge.dim", style: { "opacity": 0.06 } },
+
+    // --- mismatch warnings: paint the offending edge + its endpoints red ---
+    // (listed last so these win the per-property cascade over the base rules)
+    { selector: "node[?warn]", style: {
+        "border-color": "#ff5a5f", "border-width": 2.6, "border-opacity": 1,
+        "underlay-color": "#ff5a5f", "underlay-opacity": 0.45, "underlay-padding": 10,
+        "color": "#ffe3e4" } },
+    { selector: "edge[?warn]", style: {
+        "line-fill": "solid", "line-color": "#ff5a5f", "line-style": "solid",
+        "width": 3.4, "opacity": 1,
+        "target-arrow-color": "#ff5a5f", "color": "#ff9a9d", "z-index": 90 } }
+  ]
+});
+
+// ---- layout: directed pipeline via dagre L->R. Deep models are folded to a
+//      shallow graph first (see collapse below), so dagre handles every case;
+//      breadthfirst/cose are last-resort fallbacks if the dagre adapter is
+//      somehow missing. All libs are inlined (no CDN), so dagre should be here.
+if (window.cytoscapeDagre && cytoscape.use) { try { cytoscape.use(window.cytoscapeDagre); } catch(_){} }
+
+function nodeDepth(n){ let k=0,p=n.parent(); while(p.nonempty()){ k++; p=p.parent(); } return k; }
+function maxDepth(){ let d=0; cy.nodes(":visible").forEach((n)=>{ const k=nodeDepth(n); if(k>d)d=k; }); return d; }
+
+// Layout choice (verified empirically): cytoscape-dagre collapses sibling
+// COMPOUND nodes joined by fan edges into a single column (sfumato became 1
+// column), so dagre is only good once a deep model is folded to a near-linear
+// chain. Rule: a mostly-linear visible graph -> dagre L->R; a fan/parallel
+// shallow graph (sfumato's plan->5 branches->vote) -> breadthfirst.
+function looksLinear(){
+  // linear if the max fan-out of any visible node is small (<=2)
+  let maxOut = 0;
+  cy.nodes(":visible").forEach((n)=>{
+    const outs = n.outgoers("node").filter((m)=> m.visible()).length;
+    if (outs > maxOut) maxOut = outs;
+  });
+  return maxOut <= 2;
+}
+function runLayout(){
+  const common = { animate:false, padding:44, nodeDimensionsIncludeLabels:true };
+  let ran = false;
+  // Verified empirically: dagre lays out a near-LINEAR, SHALLOW graph as a clean
+  // L->R pipeline (folded deep models: Qwen3/resnet collapsed to [+] chains), but
+  // (a) crushes a FAN of sibling compounds into one column (sfumato), and
+  // (b) STACKS deeply-nested compound boxes on top of each other when a deep
+  //     model is expanded (the "everything goes orange" bug on expand-all).
+  // cose is compound-aware, so use dagre only when linear AND shallow (<=2 deep).
+  if (window.cytoscapeDagre && looksLinear() && maxDepth() <= 2){
+    try { cy.layout({ name:"dagre", rankDir:"LR", nodeSep:28, rankSep:96, edgeSep:14, ...common }).run(); ran = true; } catch(_){}
+  }
+  if (!ran){ cy.layout({ name:"cose", idealEdgeLength:90, nodeOverlap:24, gravity:0.3,
+                         componentSpacing:120, ...common }).run(); }
+  cy.fit(undefined, 52);
+}
+window.cy = cy;  // expose for debugging / programmatic focus
+// True node count captured BEFORE any collapse — once a deep model is folded,
+// cytoscape-expand-collapse drops the hidden children from cy.nodes(), so a
+// later cy.nodes().length reads ~10 not 66 and would defeat the expand-all cap.
+const TOTAL_NODES = cy.nodes().length;
+
+// ---- collapse / expand: fold repeated blocks so deep models stay legible ----
+// A deep model is usually N copies of one block (Qwen3DecoderLayer x4, resnet
+// Sequential x4). Folding the SHALLOWEST repeated compound turns the graph into
+// a near-linear chain -> dagre then reads it as a clean L->R pipeline. Each
+// folded block is one [+] node; click to expand. sfumato (shallow) is untouched.
+let ecApi = null;
+try {
+  if (window.cytoscapeExpandCollapse) cytoscape.use(window.cytoscapeExpandCollapse);
+  ecApi = cy.expandCollapse({
+    layoutBy: null, fisheye: false, animate: false, undoable: false,
+    expandCollapseCueSize: 13, expandCollapseCueLineSize: 9, cueOffset: -2,
+  });
+} catch (_) { ecApi = null; }
+window.ecApi = ecApi;  // exposed for the extension toolbar + debugging
+
+// Among compound names occurring >=2x, fold the SHALLOWEST (the repeated block
+// itself — Sequential for resnet, Qwen3DecoderLayer for Qwen3 — not inner parts).
+function outermostRepeatedCompounds(){
+  const parents = cy.nodes().filter((n)=> n.isParent());
+  const byName = {};
+  parents.forEach((n)=>{ const nm=n.data("name"); (byName[nm]=byName[nm]||[]).push(n); });
+  let best=null, bestDepth=Infinity;
+  Object.keys(byName).forEach((nm)=>{
+    if (byName[nm].length < 2) return;
+    const d = Math.min.apply(null, byName[nm].map(nodeDepth));
+    if (d < bestDepth){ bestDepth = d; best = nm; }
+  });
+  return best ? cy.collection(byName[best]) : cy.collection();
+}
+
+// Collapse FIRST (deep models only), THEN lay out once — so runLayout sees the
+// folded, near-linear graph and picks dagre.
+if (ecApi && maxDepth() >= 3){
+  const targets = outermostRepeatedCompounds();
+  if (targets.length){ try { ecApi.collapse(targets); } catch(_){} }
+}
+runLayout();
+
+// relayout always re-fits, so expanding a deep model frames the whole thing as a
+// readable overview instead of dumping you zoomed-in to the middle of a giant
+// canvas (the "wall of orange" symptom). cy.fit is inside runLayout already.
+function relayout(){ try { runLayout(); } catch(_){ cy.fit(undefined, 52); } }
+const _be = document.getElementById("btn-expand");
+const _bc = document.getElementById("btn-collapse");
+// Expanding a big deep model to its full node count is an unreadable smear even
+// fit-to-screen, so cap it: only auto-expand-all when the result stays modest;
+// otherwise nudge the user to drill into a single block via its [+] cue.
+const EXPAND_ALL_CAP = 40;
+if (_be) _be.onclick = ()=>{
+  if(!ecApi) return;
+  // NB: compare TOTAL_NODES (captured before collapse), NOT cy.nodes().length —
+  // expand-collapse removes hidden children from cy.nodes(), so post-collapse it
+  // reads ~10 and the cap never triggers.
+  if (TOTAL_NODES > EXPAND_ALL_CAP){
+    const bar = document.getElementById("hud");
+    let t = document.getElementById("hud-toast");
+    if (!t){ t = document.createElement("span"); t.id = "hud-toast";
+      t.style.cssText = "color:#ebcb8b;font-size:11px;letter-spacing:.06em;margin-left:10px;"; bar.appendChild(t); }
+    t.textContent = `· ${TOTAL_NODES} nodes — click a block's [+] to expand it`;
+    setTimeout(()=>{ if(t) t.textContent = ""; }, 4000);
+    return;
+  }
+  try{ ecApi.expandAll(); }catch(_){} relayout();
+};
+if (_bc) _bc.onclick = ()=>{ if(ecApi){ const t=outermostRepeatedCompounds();
+  try{ t.length ? ecApi.collapse(t) : ecApi.collapseAll(); }catch(_){} relayout(); } };
+
+// ---- animated signal flow: marching dash + comet particles ------------------
+// The dash march lives in the cytoscape stylesheet; comets are drawn on a canvas
+// overlay synced to the viewport, so tensors visibly travel along each edge.
+const fx = document.getElementById("fx");
+const fxctx = fx.getContext("2d");
+
+function sizeFx(){
+  const r = cy.container().getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  fx.width = Math.max(1, Math.floor(r.width * dpr));
+  fx.height = Math.max(1, Math.floor(r.height * dpr));
+  fx.style.width = r.width + "px";
+  fx.style.height = r.height + "px";
+  fxctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+sizeFx();
+window.addEventListener("resize", sizeFx);
+
+let _off = 0, _phase = 0;
+function frame(){
+  _off -= 0.55;                                  // dash march
+  cy.edges().style("line-dash-offset", _off);
+
+  _phase = (_phase + 0.006) % 1;                 // comet progress 0..1
+  const r = cy.container().getBoundingClientRect();
+  fxctx.clearRect(0, 0, r.width, r.height);
+  const z = cy.zoom(), pan = cy.pan();            // model -> rendered transform
+  const edges = cy.edges(":visible");
+  for (let i = 0; i < edges.length; i++){
+    const e = edges[i];
+    let sm, tm;
+    try { sm = e.sourceEndpoint(); tm = e.targetEndpoint(); }
+    catch (_) { continue; }
+    if (!sm || !tm) continue;
+    const s = { x: sm.x * z + pan.x, y: sm.y * z + pan.y };
+    const t = { x: tm.x * z + pan.x, y: tm.y * z + pan.y };
+    const warn = e.data("warn");
+    const col = warn ? "#ff5a5f" : (KIND[e.target().data("kind")] || "#88c0d0");
+    // 2 comets per edge, offset in phase, fading head
+    for (let k = 0; k < 2; k++){
+      const p = (_phase + k * 0.5) % 1;
+      const x = s.x + (t.x - s.x) * p;
+      const y = s.y + (t.y - s.y) * p;
+      const rad = warn ? 3.2 : 2.4;
+      const g = fxctx.createRadialGradient(x, y, 0, x, y, rad * 3);
+      g.addColorStop(0, col);
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      fxctx.fillStyle = g;
+      fxctx.beginPath();
+      fxctx.arc(x, y, rad * 3, 0, Math.PI * 2);
+      fxctx.fill();
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// "power-on" fade-in once the layout has settled.
+setTimeout(()=> cy.container().classList.add("booted"), 60);
+
+// hover: also brighten the connected edges, not just the node.
+cy.on("mouseover", "node", (e)=>{ e.target.connectedEdges().style("opacity", 1); });
+cy.on("mouseout", "node", ()=>{ cy.edges().removeStyle("opacity"); });
+
+// ---- hover: spotlight a node + its wiring -----------------------------------
+cy.on("mouseover", "node", (e)=>{
+  const n = e.target; n.addClass("hi");
+  const keep = n.closedNeighborhood().add(n.descendants()).add(n.ancestors());
+  cy.elements().not(keep).addClass("dim");
+});
+cy.on("mouseout", "node", (e)=>{ e.target.removeClass("hi"); cy.elements().removeClass("dim"); });
+
+// ---- detail panel (safe DOM only; node data is semi-trusted) ----------------
+const panel = document.getElementById("panel");
+const pbody = document.getElementById("panel-body");
+document.getElementById("pclose").onclick = ()=> panel.classList.remove("open");
+
+function row(parent, k, v){
+  const a=document.createElement("div"); a.className="k"; a.textContent=k;
+  const b=document.createElement("div"); b.className="v"; b.textContent=v;
+  parent.appendChild(a); parent.appendChild(b);
+}
+function showPanel(d){
+  pbody.replaceChildren();
+  const name=document.createElement("div"); name.className="pname"; name.textContent=d.name||d.id;
+  pbody.appendChild(name);
+  const badge=document.createElement("span"); badge.className="badge";
+  badge.textContent=d.kind; badge.style.color=shade(d.kind); pbody.appendChild(badge);
+  const rows=document.createElement("div"); rows.className="rows";
+  const m=d.meta||{};
+  if (m.out_shape) row(rows,"out", "["+m.out_shape.join(", ")+"]");
+  if (m.in_shape)  row(rows,"in",  "["+m.in_shape.join(", ")+"]");
+  if (typeof m.params==="number") row(rows,"params", m.params.toLocaleString());
+  if (m.dtype) row(rows,"dtype", m.dtype);
+  if (d.prov) row(rows,"source", d.prov);
+  const a=d.attrs||{};
+  if (a.repeat) row(rows,"repeat", "x"+a.repeat);
+  if (a.branch) row(rows,"role","branch");
+  if (a.reduce) row(rows,"role","reduce / vote");
+  pbody.appendChild(rows);
+  if (d.loc){
+    const loc=document.createElement("div"); loc.className="loc";
+    loc.textContent="↳ "+d.loc.file.split("/").pop()+":"+d.loc.line;
+    loc.onclick=()=>{ if(vscode) vscode.postMessage({type:"reveal", loc:d.loc}); };
+    pbody.appendChild(loc);
+  }
+  panel.classList.add("open");
+}
+cy.on("tap","node",(e)=>{ showPanel(e.target.data()); if(vscode&&e.target.data("loc")) vscode.postMessage({type:"reveal", loc:e.target.data("loc")}); });
+cy.on("tap",(e)=>{ if(e.target===cy) panel.classList.remove("open"); });
+
+// ---- legend (only kinds actually present) ----------------------------------
+(function(){
+  const present=[...new Set(cy.nodes().map(n=>n.data("kind")))];
+  const order=["pipeline","stage","model","module","op"];
+  const leg=document.getElementById("legend");
+  order.filter(k=>present.includes(k)).forEach(k=>{
+    const el=document.createElement("span"); el.className="lg";
+    const sw=document.createElement("i"); sw.style.background=KIND[k];
+    sw.style.boxShadow="0 0 8px "+KIND[k]; el.appendChild(sw);
+    const t=document.createElement("span"); t.textContent=k; el.appendChild(t);
+    leg.appendChild(el);
+  });
+})();
+
+// ---- mismatch warnings: pill + collapsible list, click to focus the edge ----
+(function(){
+  const warns = (NETSCOPE_ELEMENTS && NETSCOPE_ELEMENTS.warnings) || [];
+  if (!warns.length) return;
+  const pill = document.getElementById("warnpill");
+  const box = document.getElementById("warnbox");
+  document.getElementById("warncount").textContent = String(warns.length);
+  pill.classList.add("show");
+
+  const title = document.createElement("div");
+  title.className = "wtitle";
+  title.textContent = warns.length + " shape mismatch" + (warns.length > 1 ? "es" : "");
+  box.appendChild(title);
+
+  warns.forEach((w)=>{
+    const it = document.createElement("div");
+    it.className = "witem";
+    it.textContent = "⚠ " + w.detail;           // textContent: detail is semi-trusted
+    it.onclick = ()=>{
+      const e = cy.getElementById(w.src + "->" + w.dst);
+      const ep = cy.edges().filter((x)=> x.data("source")===w.src && x.data("target")===w.dst);
+      const focus = ep.nonempty() ? ep.union(ep.connectedNodes()) : cy.getElementById(w.dst);
+      if (focus.nonempty()) cy.animate({ fit: { eles: focus, padding: 80 } }, { duration: 250 });
+    };
+    box.appendChild(it);
+  });
+
+  pill.onclick = ()=> box.classList.toggle("show");
+})();
+</script>
+</body>
+</html>

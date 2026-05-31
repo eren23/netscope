@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+node_modules/
+extension/out/
+*.netscope.html
+*.netviz.html
+.playwright-mcp/
+*.png
+.DS_Store
+*.vsix
+.claude/

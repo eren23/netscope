@@ -1,0 +1,4 @@
+{
+  "//": "Point netscope's Run & Trace at this repo's venv so it can import netscope.",
+  "netscope.pythonPath": "${workspaceFolder}/.venv/bin/python"
+}

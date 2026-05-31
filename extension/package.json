@@ -1,0 +1,105 @@
+{
+  "name": "netscope",
+  "displayName": "netscope \u2014 ML pipeline graph",
+  "description": "An oscilloscope for your neural net: trace & visualize PyTorch/transformers architectures with live tensor shapes, right in the editor.",
+  "version": "0.1.0",
+  "publisher": "netscope",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Data Science",
+    "Machine Learning"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:python"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "netscope.showGraph",
+        "title": "netscope: Show Pipeline Graph",
+        "category": "netscope"
+      },
+      {
+        "command": "netscope.runAndTrace",
+        "title": "netscope: Run & Trace This File",
+        "category": "netscope"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "netscope.runAndTrace",
+        "key": "ctrl+alt+t",
+        "mac": "cmd+alt+t",
+        "when": "editorLangId == python"
+      },
+      {
+        "command": "netscope.showGraph",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g",
+        "when": "editorLangId == python"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "netscope.runAndTrace",
+          "when": "editorLangId == python",
+          "group": "netscope@1"
+        },
+        {
+          "command": "netscope.showGraph",
+          "when": "editorLangId == python",
+          "group": "netscope@2"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "netscope",
+      "properties": {
+        "netscope.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Python interpreter to run netscope with (e.g. the venv's python). Defaults to python3 on PATH."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test:unit": "node ./out/test/mergeByLoc.test.js",
+    "test:headless": "node ./test/headless.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eren23/netscope.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eren23/netscope/issues"
+  },
+  "homepage": "https://github.com/eren23/netscope#readme",
+  "keywords": [
+    "pytorch",
+    "transformers",
+    "neural network",
+    "visualization",
+    "tracing",
+    "machine learning",
+    "graph",
+    "tensor shapes"
+  ],
+  "galleryBanner": {
+    "color": "#0b0e14",
+    "theme": "dark"
+  }
+}
