@@ -34,10 +34,15 @@ def merge(runtime: NVGraph, static: NVGraph) -> NVGraph:
 
     matched_static_ids = set()
 
-    # 1) runtime nodes, fused with any static node sharing their loc
+    # 1) runtime nodes, fused with any static node sharing their loc. A static
+    #    node fuses into AT MOST ONE runtime node (first match wins) — two runtime
+    #    nodes can legitimately share a loc (a submodule called twice, a loop
+    #    body), and duplicating the static node's attrs across both is wrong.
     for rt in runtime.nodes():
         key = _loc_key(rt)
         st = static_by_loc.get(key) if key is not None else None
+        if st is not None and st["id"] in matched_static_ids:
+            st = None   # already fused into an earlier runtime node at this loc
         attrs = dict(rt.get("attrs") or {})
         source = rt["source"]
         if st is not None:
@@ -55,9 +60,15 @@ def merge(runtime: NVGraph, static: NVGraph) -> NVGraph:
                        tensor_meta=e.get("tensor_meta"), source=e["source"],
                        condition=e.get("condition"))
 
-    # 3) static-only nodes (structure the runtime never saw)
+    # 3) static-only nodes (structure the runtime never saw — e.g. a branch fan
+    #    or a vote stage). BUT drop unmatched declared-dim nodes: those exist only
+    #    for the static pre-check and are redundant with runtime module nodes, so
+    #    an unmatched one is a layer that didn't run (e.g. an unused fallback
+    #    class) — keeping it would float a stray node in the real trace.
     for st in static.nodes():
         if st["id"] in matched_static_ids:
+            continue
+        if (st.get("attrs") or {}).get("declared_dim"):
             continue
         fused.add_node(
             st["id"], kind=st["kind"], name=st["name"], parent=st.get("parent"),

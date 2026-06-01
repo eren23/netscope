@@ -128,3 +128,69 @@ def test_merge_adds_static_only_nodes():
     assert names == {"Qwen", "vote"}   # vote (runtime-invisible) is carried in
     vote = next(n for n in fused.nodes() if n["name"] == "vote")
     assert vote["source"] == "static"
+
+
+# --- declared-dim nodes must not pollute a fused runtime graph ----------------
+def test_merge_drops_unmatched_declared_dim_nodes():
+    """An M2 declared-dim node that doesn't loc-match a runtime node is a layer
+    that never ran (e.g. inside an unused fallback class). It's redundant with
+    runtime module nodes, so merge must drop it — otherwise it floats free in the
+    real trace (the 'stray Linear' bug)."""
+    runtime = NVGraph("r")
+    runtime.add_node("rt", kind="module", name="Embedding", source="runtime",
+                     loc={"file": "m.py", "line": 5}, meta={"out_shape": [1, 8, 1024]})
+    static = NVGraph("s")
+    # a declared-dim node for a layer that the runtime never executed
+    static.add_node("dim#1", kind="module", name="Linear", source="static",
+                    loc={"file": "m.py", "line": 58}, meta={"qualname": "lm_head",
+                    "in_shape": [1, 256], "out_shape": [1, 8000]},
+                    attrs={"declared_dim": True})
+    # ...and a genuine static-only branch node, which MUST survive
+    static.add_node("vote", kind="stage", name="vote", source="static",
+                    loc={"file": "m.py", "line": 20}, attrs={"reduce": True})
+
+    fused = merge(runtime, static)
+    names = {n["name"] for n in fused.nodes()}
+    assert "Embedding" in names           # runtime node kept
+    assert "vote" in names                # genuine static-only structure kept
+    assert "Linear" not in names          # the orphan declared-dim node dropped
+
+
+def test_merge_keeps_declared_dim_node_when_it_matches_runtime():
+    """If a declared-dim node DOES loc-match a runtime node, the runtime node wins
+    (and gains the static attrs) — it isn't dropped, just fused normally."""
+    runtime = NVGraph("r")
+    runtime.add_node("rt", kind="module", name="Linear", source="runtime",
+                     loc={"file": "m.py", "line": 7}, meta={"out_shape": [1, 128]})
+    static = NVGraph("s")
+    static.add_node("dim#1", kind="module", name="Linear", source="static",
+                    loc={"file": "m.py", "line": 7}, meta={"in_shape": [1, 64]},
+                    attrs={"declared_dim": True})
+    fused = merge(runtime, static)
+    assert len(fused.nodes()) == 1
+    node = fused.nodes()[0]
+    assert node["source"] == "fused"
+    assert node["meta"]["out_shape"] == [1, 128]   # runtime shape kept
+
+
+# --- merge loc-collision: a static node fuses into AT MOST ONE runtime node ----
+def test_merge_static_node_fuses_into_at_most_one_runtime_node():
+    """Two runtime nodes can share a loc (a submodule called twice, or a loop
+    body). A single static node at that loc must fuse into only ONE of them —
+    otherwise its attrs get duplicated across unrelated runtime nodes."""
+    rt = NVGraph("r")
+    rt.add_node("a", kind="module", name="Linear", source="runtime",
+                loc={"file": "m.py", "line": 5}, meta={"out_shape": [1, 8]})
+    rt.add_node("b", kind="module", name="Linear", source="runtime",
+                loc={"file": "m.py", "line": 5}, meta={"out_shape": [1, 8]})
+    st = NVGraph("s")
+    st.add_node("s1", kind="stage", name="plan", source="static",
+                loc={"file": "m.py", "line": 5}, attrs={"declared": True})
+
+    fused = merge(rt, st)
+    fused_count = sum(1 for n in fused.nodes() if n["source"] == "fused")
+    assert fused_count == 1, f"a static node fused into {fused_count} runtime nodes (should be 1)"
+    # both runtime nodes survive; only one carries the static attrs
+    with_attr = [n for n in fused.nodes() if (n.get("attrs") or {}).get("declared")]
+    assert len(with_attr) == 1
+    assert len([n for n in fused.nodes()]) == 2   # no node lost

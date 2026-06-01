@@ -99,13 +99,38 @@ with netscope.reduce("vote"):    winner = majority(cands)
 
 `extension/` is a TypeScript extension that renders the graph in the editor:
 **Show Graph** (static skeleton, no run) and **Run & Trace** (real graph, fused
-by source location), with click-a-node → jump-to-line.
+by source location), with click-a-node → jump-to-line. After a trace you also get
+**inline shape hints** (each layer's real tensor shape as ghost text on its line),
+**mismatch squiggles** (shape clashes underlined in red — even from the static
+pass, before you run), and an **LLM assistant** on the node panel
+(`explain` / `why flagged` / `suggest fix`, grounded in the real trace).
 
 ```bash
 cd extension && npm install && npm run compile
 # then press F5 in the extension/ folder ("Run netscope Extension"),
 # set netscope.pythonPath to your venv, open a file, click the CodeLens.
 ```
+
+Keyboard: **⌘⌥T** / **Ctrl+Alt+T** = Run & Trace, **⌘⌥G** / **Ctrl+Alt+G** = Show Graph.
+
+### LLM assistant (optional)
+
+The assistant talks to **any OpenAI-compatible endpoint** — OpenRouter by default
+(→ many cheap models like Gemini Flash), or OpenAI / Together / Groq / a local
+server. It's entirely optional: with no key, every other feature works offline.
+
+- **In the editor:** run **`netscope: Set LLM API Key`** from the command palette.
+  Your key is stored in the **OS keychain** (VSCode SecretStorage) — never in
+  `settings.json`, never synced, never in git. Pick the model / endpoint via the
+  `netscope.llm.model` and `netscope.llm.baseUrl` settings (these are not secret).
+- **From the library / scripts:** set an env var instead —
+  `OPENROUTER_API_KEY` (or `NETSCOPE_LLM_API_KEY` / `OPENAI_API_KEY`), with
+  optional `NETSCOPE_LLM_MODEL` and `NETSCOPE_LLM_BASE_URL`. Then:
+  ```python
+  import netscope.llm as nl
+  if nl.available():
+      print(nl.explain(graph, node_id, question="why_warn"))
+  ```
 
 ## Architecture
 

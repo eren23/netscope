@@ -2,7 +2,7 @@
   "name": "netscope",
   "displayName": "netscope \u2014 ML pipeline graph",
   "description": "An oscilloscope for your neural net: trace & visualize PyTorch/transformers architectures with live tensor shapes, right in the editor.",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "publisher": "netscope",
   "engines": {
     "vscode": "^1.85.0"
@@ -26,6 +26,21 @@
       {
         "command": "netscope.runAndTrace",
         "title": "netscope: Run & Trace This File",
+        "category": "netscope"
+      },
+      {
+        "command": "netscope.setLlmKey",
+        "title": "netscope: Set LLM API Key",
+        "category": "netscope"
+      },
+      {
+        "command": "netscope.clearLlmKey",
+        "title": "netscope: Clear LLM API Key",
+        "category": "netscope"
+      },
+      {
+        "command": "netscope.checkSetup",
+        "title": "netscope: Check Setup",
         "category": "netscope"
       }
     ],
@@ -64,6 +79,16 @@
           "type": "string",
           "default": "",
           "description": "Python interpreter to run netscope with (e.g. the venv's python). Defaults to python3 on PATH."
+        },
+        "netscope.llm.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model for the LLM assistant (e.g. google/gemini-2.0-flash-001, gpt-4o-mini). Blank uses netscope's default. The API key is NOT here \u2014 set it via 'netscope: Set LLM API Key' (stored in your OS keychain)."
+        },
+        "netscope.llm.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI-compatible API base URL for the LLM assistant (e.g. https://openrouter.ai/api/v1, https://api.openai.com/v1, or a local server). Blank uses OpenRouter."
         }
       }
     }

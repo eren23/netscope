@@ -98,6 +98,15 @@
   #panel .loc { margin-top:14px; font-size:11px; color:var(--stage); cursor:pointer;
     border-top:1px solid var(--hair); padding-top:11px; letter-spacing:.04em; }
   #panel .loc:hover { text-decoration:underline; }
+  #panel .ask { margin-top:14px; display:flex; flex-wrap:wrap; gap:6px;
+    border-top:1px solid var(--hair); padding-top:12px; }
+  #panel .askbtn { font:inherit; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    cursor:pointer; padding:5px 9px; border-radius:5px; border:1px solid var(--hair);
+    background:transparent; color:var(--ink-dim); }
+  #panel .askbtn:hover { color:var(--ink); border-color:var(--stage); }
+  #panel .answer { margin-top:10px; font-size:12px; line-height:1.5; color:var(--ink);
+    white-space:pre-wrap; background:rgba(255,255,255,.03); border-radius:6px;
+    padding:10px 12px; border:1px solid var(--hair); }
   .pclose { position:absolute; top:11px; right:13px; color:var(--ink-dim); cursor:pointer;
     font-size:15px; line-height:1; }
   .pclose:hover { color:var(--ink); }
@@ -420,6 +429,7 @@ function showPanel(d){
   if (m.in_shape)  row(rows,"in",  "["+m.in_shape.join(", ")+"]");
   if (typeof m.params==="number") row(rows,"params", m.params.toLocaleString());
   if (m.dtype) row(rows,"dtype", m.dtype);
+  if (m.device) row(rows,"device", m.device);
   if (d.prov) row(rows,"source", d.prov);
   const a=d.attrs||{};
   if (a.repeat) row(rows,"repeat", "x"+a.repeat);
@@ -432,9 +442,51 @@ function showPanel(d){
     loc.onclick=()=>{ if(vscode) vscode.postMessage({type:"reveal", loc:d.loc}); };
     pbody.appendChild(loc);
   }
+  // ---- isolate (extension host only): re-run JUST this module on its real input
+  // and draw the focused sub-trace. Needs a qualname (a module the tracer named).
+  if (vscode && m.qualname){
+    const iso=document.createElement("div"); iso.className="ask";
+    const b=document.createElement("button"); b.className="askbtn";
+    b.textContent="⌖ isolate this block";
+    b.title="Re-run just "+m.qualname+" on its real input";
+    b.onclick=()=>{ vscode.postMessage({type:"isolate", qualname:m.qualname}); };
+    iso.appendChild(b);
+    pbody.appendChild(iso);
+  }
+  // ---- LLM assistant (extension host only; needs to shell out to python) ----
+  if (vscode){
+    const ask=document.createElement("div"); ask.className="ask";
+    const hasWarn = !!d.warn;
+    const opts = [["explain","explain"],["suggest_fix","suggest fix"]];
+    if (hasWarn) opts.unshift(["why_warn","why flagged?"]);
+    opts.forEach(([q,label])=>{
+      const b=document.createElement("button"); b.className="askbtn"; b.textContent=label;
+      b.onclick=()=>{
+        ansBox.textContent="netscope is thinking…"; ansBox.style.display="block";
+        vscode.postMessage({type:"ask", nodeId:d.id, question:q});
+      };
+      ask.appendChild(b);
+    });
+    pbody.appendChild(ask);
+    const ansBox=document.createElement("div"); ansBox.className="answer"; ansBox.style.display="none";
+    ansBox.dataset.node=d.id; pbody.appendChild(ansBox);
+    panel._ansBox=ansBox;  // so the answer postback can find it
+  }
   panel.classList.add("open");
 }
-cy.on("tap","node",(e)=>{ showPanel(e.target.data()); if(vscode&&e.target.data("loc")) vscode.postMessage({type:"reveal", loc:e.target.data("loc")}); });
+// Tapping a node opens the inspector panel ONLY — it does not jump to source.
+// Click the ↳ file:line link in the panel to reveal (so inspecting a node doesn't
+// yank your editor away every time). This was firing reveal twice per click.
+cy.on("tap","node",(e)=>{ showPanel(e.target.data()); });
+// the extension posts {type:"answer", nodeId, text} back after asking the model
+if (vscode){
+  window.addEventListener("message",(ev)=>{
+    const msg=ev.data||{};
+    if(msg.type==="answer" && panel._ansBox && panel._ansBox.dataset.node===msg.nodeId){
+      panel._ansBox.textContent = msg.text || "(no answer — is an LLM key set?)";
+    }
+  });
+}
 cy.on("tap",(e)=>{ if(e.target===cy) panel.classList.remove("open"); });
 
 // ---- legend (only kinds actually present) ----------------------------------

@@ -29,16 +29,19 @@ def test_transformer_encoder_layer_captured_with_shapes():
 
 
 def test_multihead_attention_tuple_output_is_handled_gracefully():
-    """MultiheadAttention returns a (output, weights) tuple, not a tensor; the
-    node is still captured (out_shape just stays absent) and nesting stays
-    balanced — a regression guard for non-tensor module outputs."""
+    """MultiheadAttention returns a (output, weights) tuple, not a bare tensor.
+    The node is captured, nesting stays balanced, and (since A2) we surface the
+    REPRESENTATIVE output shape — the first reachable tensor, i.e. the attention
+    output [2, 5, 32] — instead of nothing. A regression guard for tuple/dict
+    module outputs."""
     layer = nn.TransformerEncoderLayer(
         d_model=32, nhead=4, dim_feedforward=64, batch_first=True
     )
     with netscope.graph("t") as g:
         layer(torch.randn(2, 5, 32))
     mha = next(n for n in g.nodes() if n["name"] == "MultiheadAttention")
-    assert "out_shape" not in mha["meta"]              # tuple -> no shape, no crash
+    # the (output, weights) tuple -> the attention OUTPUT shape is surfaced
+    assert mha["meta"]["out_shape"] == [2, 5, 32]
     assert mha["parent"] is not None                   # still correctly nested
 
 

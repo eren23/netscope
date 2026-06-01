@@ -20,12 +20,21 @@ def _shape(meta_shape) -> Optional[list]:
         return None
 
 
+def _label(node) -> str:
+    """How to name a node in a warning. Prefer the qualified attribute name
+    (`backbone`, `layers.2.attn`) when present — it disambiguates two layers of
+    the same class (two `Linear`s) — else the class name."""
+    q = (node.get("meta") or {}).get("qualname")
+    return q or node["name"]
+
+
 def _check_edge(a, b, src, dst) -> Optional[dict]:
     a_shape = _shape((a.get("meta") or {}).get("out_shape"))
     b_shape = _shape((b.get("meta") or {}).get("in_shape"))
     if a_shape is None or b_shape is None:
         return None
 
+    a_name, b_name = _label(a), _label(b)
     base = {"src": src, "dst": dst, "severity": "error"}
 
     # 1) rank mismatch first — e.g. Conv2d (N,C,H,W) into a Linear (N,F). The
@@ -35,8 +44,8 @@ def _check_edge(a, b, src, dst) -> Optional[dict]:
         return {
             **base, "kind": "rank_mismatch",
             "detail": (
-                f"{a['name']} emits a {len(a_shape)}-D tensor but "
-                f"{b['name']} expects {len(b_shape)}-D — missing a flatten()/reshape()?"
+                f"{a_name} emits a {len(a_shape)}-D tensor but "
+                f"{b_name} expects {len(b_shape)}-D — missing a flatten()/reshape()?"
             ),
         }
 
@@ -49,11 +58,11 @@ def _check_edge(a, b, src, dst) -> Optional[dict]:
         diffs = [i for i in range(len(a_feat)) if a_feat[i] != b_feat[i]]
         if len(diffs) == 1:
             i = diffs[0]
-            detail = (f"{a['name']} emits dim {a_feat[i]} but "
-                      f"{b['name']} expects {b_feat[i]} (axis {i + 1})")
+            detail = (f"{a_name} emits dim {a_feat[i]} but "
+                      f"{b_name} expects {b_feat[i]} (axis {i + 1})")
         else:
-            detail = (f"{a['name']} emits non-batch shape {a_feat} but "
-                      f"{b['name']} expects {b_feat}")
+            detail = (f"{a_name} emits non-batch shape {a_feat} but "
+                      f"{b_name} expects {b_feat}")
         return {**base, "kind": "shape_mismatch", "detail": detail}
     return None
 
