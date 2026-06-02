@@ -145,8 +145,10 @@
 __NETSCOPE_VENDOR__
 <script>
 const NETSCOPE_ELEMENTS = __NETSCOPE_ELEMENTS__;
-const KIND = { pipeline:"#8aa0b8", stage:"#22d3ee", model:"#34d399", module:"#f5b942", op:"#b98aff" };
-const KIND_DK = { pipeline:"#1a2330", stage:"#06303a", model:"#063528", module:"#3a2b08", op:"#241640" };
+// brighter, more saturated accents (the muted originals read as a wireframe)
+const KIND = { pipeline:"#9db8d4", stage:"#2ee6ff", model:"#34f5a8", module:"#ffc233", op:"#cf8bff" };
+// leaf fills: a touch richer + warmer so chips feel solid, not flat
+const KIND_DK = { pipeline:"#1b2738", stage:"#04323e", model:"#053a2c", module:"#3f2e07", op:"#281846" };
 const vscode = (typeof acquireVsCodeApi === "function") ? acquireVsCodeApi() : null;
 
 function shade(kind){ return KIND[kind] || "#5a6b7e"; }
@@ -176,16 +178,21 @@ const cy = cytoscape({
         "transition-property": "underlay-opacity underlay-padding border-width",
         "transition-duration": "140ms" } },
 
-    // compound containers (stages that hold modules) — BORDER ONLY, no fill and
-    // no underlay glow. Nested compounds would otherwise stack translucent fills
-    // and the accumulated alpha washes deep models orange. Outline-only keeps any
-    // depth readable as clean nested frames.
+    // compound containers (stages that hold modules) — depth-cued frames. Almost
+    // no fill (a hair of alpha that does NOT accumulate to orange across depth),
+    // with the OUTER frames drawn thicker + brighter and inner ones thinner, so
+    // the nesting reads at a glance instead of looking like identical boxes.
     { selector: ":parent", style: {
-        "background-opacity": 0,
-        "border-width": 1.2, "border-color": (e)=> shade(e.data("kind")), "border-opacity": 0.55,
+        "background-color": (e)=> shade(e.data("kind")),
+        "background-opacity": 0.022,
+        "border-width": (e)=> Math.max(1, 2.4 - nodeDepth(e) * 0.6),
+        "border-color": (e)=> shade(e.data("kind")),
+        "border-opacity": (e)=> Math.max(0.32, 0.82 - nodeDepth(e) * 0.16),
+        "corner-radius": 12,
         "label": "data(name)", "text-valign": "top", "text-halign": "center",
-        "text-margin-y": -6, "font-family": FONT, "font-size": 10, "text-transform": "uppercase",
-        "color": (e)=> shade(e.data("kind")), "padding": "18px" } },
+        "text-margin-y": -7, "font-family": FONT, "font-size": 10, "text-transform": "uppercase",
+        "font-weight": "bold", "text-opacity": (e)=> Math.max(0.5, 0.95 - nodeDepth(e) * 0.14),
+        "color": (e)=> shade(e.data("kind")), "padding": "20px" } },
 
     // edges: gradient source-kind -> target-kind, dashed for the marching pulse
     { selector: "edge", style: {
@@ -196,10 +203,13 @@ const cy = cytoscape({
         "line-style": "dashed", "line-dash-pattern": [3, 7], "line-cap": "round",
         "target-arrow-shape": "triangle", "target-arrow-fill": "filled",
         "target-arrow-color": (e)=> shade(e.target().data("kind")),
-        "arrow-scale": 0.95, "opacity": 0.9,
+        "arrow-scale": 0.95, "opacity": 0.92 } },
+    // the tensor-shape label ONLY on edges that have one — a bare `data(label)` on
+    // label-less edges triggers a cytoscape warning per edge (22 on sfumato).
+    { selector: "edge[label]", style: {
         "label": "data(label)", "font-family": FONT, "font-size": 9,
-        "color": "#9fb4c4", "text-background-color": "#06080c",
-        "text-background-opacity": 0.85, "text-background-padding": 3,
+        "color": "#aec3d4", "text-background-color": "#06080c",
+        "text-background-opacity": 0.88, "text-background-padding": 3,
         "text-background-shape": "round-rectangle" } },
 
     { selector: "node.hi", style: {
@@ -210,16 +220,17 @@ const cy = cytoscape({
     { selector: ".dim", style: { "opacity": 0.18 } },
     { selector: "edge.dim", style: { "opacity": 0.06 } },
 
-    // --- mismatch warnings: paint the offending edge + its endpoints red ---
-    // (listed last so these win the per-property cascade over the base rules)
+    // --- mismatch warnings: paint the offending edge + its endpoints red, and
+    // make them impossible to miss — thick border + a strong glow that PULSES
+    // (animated in JS below). Listed last so they win the per-property cascade.
     { selector: "node[?warn]", style: {
-        "border-color": "#ff5a5f", "border-width": 2.6, "border-opacity": 1,
-        "underlay-color": "#ff5a5f", "underlay-opacity": 0.45, "underlay-padding": 10,
-        "color": "#ffe3e4" } },
+        "border-color": "#ff4d52", "border-width": 3.4, "border-opacity": 1,
+        "underlay-color": "#ff4d52", "underlay-opacity": 0.5, "underlay-padding": 14,
+        "color": "#ffe3e4", "z-index": 95 } },
     { selector: "edge[?warn]", style: {
-        "line-fill": "solid", "line-color": "#ff5a5f", "line-style": "solid",
-        "width": 3.4, "opacity": 1,
-        "target-arrow-color": "#ff5a5f", "color": "#ff9a9d", "z-index": 90 } }
+        "line-fill": "solid", "line-color": "#ff4d52", "line-style": "solid",
+        "width": 4, "opacity": 1,
+        "target-arrow-color": "#ff4d52", "color": "#ffb0b3", "z-index": 96 } }
   ]
 });
 
@@ -260,7 +271,23 @@ function runLayout(){
   }
   if (!ran){ cy.layout({ name:"cose", idealEdgeLength:90, nodeOverlap:24, gravity:0.3,
                          componentSpacing:120, ...common }).run(); }
-  cy.fit(undefined, 52);
+  fitNicely();
+}
+
+// Fit the graph so it fills the canvas and is centered — not a postage stamp
+// stranded in a sea of black. cy.fit() fits the LIMITING axis, so a wide-short
+// pipeline (1500x366 in a 1200x1170 canvas) fit-to-width leaves ~70% vertical
+// emptiness. We compute a zoom that targets ~82% of whichever axis is tighter
+// (clamped to a readable range), then dead-center it.
+function fitNicely(){
+  const bb = cy.elements().boundingBox();
+  if (!bb || !bb.w || !bb.h){ cy.fit(undefined, 48); return; }
+  const W = cy.width(), H = cy.height();
+  const fill = 0.84;                                  // use 84% of the canvas
+  let z = Math.min((W * fill) / bb.w, (H * fill) / bb.h);
+  z = Math.max(0.35, Math.min(1.6, z));               // readable bounds
+  cy.zoom(z);
+  cy.center();                                        // center the whole graph
 }
 window.cy = cy;  // expose for debugging / programmatic focus
 // True node count captured BEFORE any collapse — once a deep model is folded,
@@ -354,9 +381,18 @@ sizeFx();
 window.addEventListener("resize", sizeFx);
 
 let _off = 0, _phase = 0;
+let _t = 0;
+const _warnNodes = cy.nodes("[?warn]");
 function frame(){
   _off -= 0.55;                                  // dash march
   cy.edges().style("line-dash-offset", _off);
+  _t += 0.05;
+
+  // pulse the mismatch nodes' glow so a shape clash is impossible to miss.
+  if (_warnNodes.nonempty()){
+    const u = 0.34 + 0.30 * (0.5 + 0.5 * Math.sin(_t * 1.6));   // 0.34..0.64
+    _warnNodes.style({ "underlay-opacity": u, "underlay-padding": 12 + u * 10 });
+  }
 
   _phase = (_phase + 0.006) % 1;                 // comet progress 0..1
   const r = cy.container().getBoundingClientRect();
@@ -372,19 +408,20 @@ function frame(){
     const s = { x: sm.x * z + pan.x, y: sm.y * z + pan.y };
     const t = { x: tm.x * z + pan.x, y: tm.y * z + pan.y };
     const warn = e.data("warn");
-    const col = warn ? "#ff5a5f" : (KIND[e.target().data("kind")] || "#88c0d0");
-    // 2 comets per edge, offset in phase, fading head
+    const col = warn ? "#ff4d52" : (KIND[e.target().data("kind")] || "#88c0d0");
+    // 2 comets per edge, offset in phase, fading head (brighter + larger now)
     for (let k = 0; k < 2; k++){
       const p = (_phase + k * 0.5) % 1;
       const x = s.x + (t.x - s.x) * p;
       const y = s.y + (t.y - s.y) * p;
-      const rad = warn ? 3.2 : 2.4;
-      const g = fxctx.createRadialGradient(x, y, 0, x, y, rad * 3);
+      const rad = warn ? 3.6 : 2.8;
+      const g = fxctx.createRadialGradient(x, y, 0, x, y, rad * 3.4);
       g.addColorStop(0, col);
+      g.addColorStop(0.35, col);
       g.addColorStop(1, "rgba(0,0,0,0)");
       fxctx.fillStyle = g;
       fxctx.beginPath();
-      fxctx.arc(x, y, rad * 3, 0, Math.PI * 2);
+      fxctx.arc(x, y, rad * 3.4, 0, Math.PI * 2);
       fxctx.fill();
     }
   }
