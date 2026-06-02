@@ -24,7 +24,6 @@ const MISMATCH = path.join(REPO_ROOT, "examples", "mismatch_demo.py");
 let lastPanel = null;
 const commands = {};
 const codeLensProviders = [];
-const inlayProviders = [];
 const diagnosticsByUri = new Map();   // fsPath -> Diagnostic[]
 const changeHandlers = [];
 const saveHandlers = [];
@@ -40,8 +39,6 @@ const vscode = {
   Range: class { constructor(a, b) { this.start = a; this.end = b; } },
   CodeLens: class { constructor(range, command) { this.range = range; this.command = command; } },
   EventEmitter: class { constructor() { this._cbs = []; this.event = (cb) => { this._cbs.push(cb); return { dispose() {} }; }; } fire(v) { this._cbs.forEach((cb) => cb(v)); } },
-  InlayHint: class { constructor(position, label, kind) { this.position = position; this.label = label; this.kind = kind; } },
-  InlayHintKind: { Type: 1, Parameter: 2 },
   Diagnostic: class { constructor(range, message, severity) { this.range = range; this.message = message; this.severity = severity; } },
   DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
   ThemeColor: class { constructor(id) { this.id = id; } },
@@ -94,7 +91,6 @@ const vscode = {
   },
   languages: {
     registerCodeLensProvider: (_sel, prov) => { codeLensProviders.push(prov); return { dispose() {} }; },
-    registerInlayHintsProvider: (_sel, prov) => { inlayProviders.push(prov); return { dispose() {} }; },
     createDiagnosticCollection: (_name) => ({
       set(uri, diags) { diagnosticsByUri.set((uri && uri.fsPath) || uri, diags || []); },
       dispose() {},
@@ -265,12 +261,18 @@ check("Run & Trace on a mismatch file publishes shape hints + a red squiggle", a
 
   await commands["netscope.runAndTrace"]();
 
-  // 1) inline shape hints: the provider should return >=1 hint with a [..] label
-  assert.strictEqual(inlayProviders.length, 1, "no inlay hints provider registered");
-  const fullRange = { start: { line: 0 }, end: { line: doc.lineCount } };
-  const hints = inlayProviders[0].provideInlayHints(doc, fullRange);
-  assert.ok(hints.length >= 1, "expected at least one inline shape hint");
-  assert.ok(hints.some((h) => /\[\d/.test(h.label)), "hint label should be a tensor shape");
+  // 1) inline shape hints (now via DECORATIONS, not InlayHints): the visible
+  // editor for this file should get >=1 end-of-line shape decoration.
+  const capturedDecos = [];
+  vscode.window.visibleTextEditors = [{
+    document: doc,
+    setDecorations: (_type, decos) => { capturedDecos.length = 0; capturedDecos.push(...decos); },
+  }];
+  // re-fire the overlay path by re-running (sets the trace + refreshes decos)
+  await commands["netscope.runAndTrace"]();
+  assert.ok(capturedDecos.length >= 1, "expected at least one shape decoration");
+  assert.ok(capturedDecos.some((d) => /\[\d/.test(d.renderOptions?.after?.contentText || "")),
+    "decoration should carry a tensor shape");
 
   // 2) mismatch squiggle: a diagnostic published for this file with the detail
   const diags = diagnosticsByUri.get(MISMATCH) || [];

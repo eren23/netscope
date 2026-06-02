@@ -1,6 +1,6 @@
 // Holds the most recent traced graph per source file, so the inlay-hint and
 // diagnostic providers can read real shapes + warnings for the file the user is
-// looking at. One small shared store keeps extension.ts, inlayHints.ts and
+// looking at. One small shared store keeps extension.ts, shapeDecorations.ts and
 // diagnostics.ts decoupled — they all key off `loc.file`.
 
 import { NVGraph } from "./ir";

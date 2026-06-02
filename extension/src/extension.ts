@@ -17,7 +17,6 @@ import * as path from "path";
 import { NVGraph } from "./ir";
 import { mergeByLoc } from "./mergeByLoc";
 import { toElements } from "./render";
-import { ShapeHints, onDidChangeInlayHints } from "./inlayHints";
 import { refreshShapeDecorations } from "./shapeDecorations";
 import * as diagnostics from "./diagnostics";
 import { setTrace, clearTrace, getTrace } from "./traceStore";
@@ -377,8 +376,7 @@ const diagCollection = diagnostics.makeCollection();
 
 function applyEditorOverlays(file: string, graph: NVGraph): void {
   setTrace(file, graph);                       // hints + decorations read this
-  onDidChangeInlayHints.fire();                // re-query inlay hints (if enabled)
-  refreshShapeDecorations();                   // ...and decorations (always visible)
+  refreshShapeDecorations();                   // shape labels (decorations)
   for (const doc of vscode.workspace.textDocuments) {
     if (doc.fileName === file) diagnostics.publish(diagCollection, doc, graph);
   }
@@ -388,7 +386,9 @@ export function activate(ctx: vscode.ExtensionContext): void {
   ctx.subscriptions.push(
     diagCollection,
     vscode.languages.registerCodeLensProvider({ language: "python" }, new Lenses()),
-    vscode.languages.registerInlayHintsProvider({ language: "python" }, new ShapeHints()),
+    // NB: shape hints are rendered via DECORATIONS (shapeDecorations.ts), not an
+    // InlayHints provider — InlayHints default to "onUnlessPressed" (invisible)
+    // AND would double-render the shape for users who have them on. One label.
     vscode.commands.registerCommand("netscope.showGraph", async () => {
       const ed = vscode.window.activeTextEditor;
       if (!ed) return;
@@ -488,7 +488,6 @@ export function activate(ctx: vscode.ExtensionContext): void {
         const hadRuntimeShapes = !!stale && stale.nodes.some((n) => (n.meta || {}).out_shape);
         if (hadRuntimeShapes) {
           clearTrace(file);
-          onDidChangeInlayHints.fire();
           refreshShapeDecorations();
         }
         liveStaticRefresh(ctx, doc);   // re-check structure + squiggles, no run
