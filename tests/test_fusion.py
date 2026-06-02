@@ -194,3 +194,45 @@ def test_merge_static_node_fuses_into_at_most_one_runtime_node():
     with_attr = [n for n in fused.nodes() if (n.get("attrs") or {}).get("declared")]
     assert len(with_attr) == 1
     assert len([n for n in fused.nodes()]) == 2   # no node lost
+
+
+# --- static branch/vote nodes must not duplicate runtime ones (the sfumato strays)
+def test_merge_drops_static_branch_when_runtime_has_branches():
+    """The static AST producer recovers a `for range(n)` as a 'branch loop' stage
+    and a Counter.most_common as a 'vote'. But if the runtime trace ALREADY has
+    branch/reduce stages (the user's netscope.branch()/reduce() markers), the
+    static ones are redundant duplicates — and since the runtime markers carry no
+    loc, they don't loc-match, so they used to float in as disconnected strays
+    (the 'branch loop' + second 'vote' seen in the sfumato fused view)."""
+    runtime = NVGraph("rt")
+    # runtime branch + reduce stages (loc=None, like the hint markers)
+    runtime.add_node("b0", kind="stage", name="diffuse[0]", source="runtime",
+                     loc=None, attrs={"branch": True})
+    runtime.add_node("v", kind="stage", name="vote", source="runtime",
+                     loc=None, attrs={"reduce": True})
+    runtime.add_edge("b0", "v", kind="dataflow", source="runtime")
+
+    static = NVGraph("st")
+    static.add_node("s_loop", kind="stage", name="branch loop", source="static",
+                    loc={"file": "m.py", "line": 63}, attrs={"branch": True})
+    static.add_node("s_vote", kind="stage", name="vote", source="static",
+                    loc={"file": "m.py", "line": 70}, attrs={"reduce": True})
+
+    fused = merge(runtime, static)
+    names = [n["name"] for n in fused.nodes()]
+    # the redundant static branch/vote are dropped; runtime ones remain
+    assert "branch loop" not in names
+    assert names.count("vote") == 1
+    assert "diffuse[0]" in names
+
+
+def test_merge_keeps_static_branch_when_runtime_has_none():
+    """If the runtime has NO branch/reduce stages (pure auto-trace, no hints), the
+    static branch/vote ARE the only structure for them — keep them."""
+    runtime = NVGraph("rt")
+    runtime.add_node("m", kind="module", name="Net", source="runtime", loc=None)
+    static = NVGraph("st")
+    static.add_node("s_vote", kind="stage", name="vote", source="static",
+                    loc={"file": "m.py", "line": 70}, attrs={"reduce": True})
+    fused = merge(runtime, static)
+    assert "vote" in [n["name"] for n in fused.nodes()]

@@ -60,20 +60,35 @@ def merge(runtime: NVGraph, static: NVGraph) -> NVGraph:
                        tensor_meta=e.get("tensor_meta"), source=e["source"],
                        condition=e.get("condition"))
 
+    # Does the runtime trace already have branch / reduce stages? (The user's
+    # netscope.branch()/reduce() hint markers — which carry no loc, so they never
+    # loc-match.) If so, the static AST's recovered "branch loop" / "vote" are
+    # redundant DUPLICATES of them, and keeping them floats disconnected strays
+    # in the fused view (the sfumato 'branch loop' + second 'vote' bug).
+    runtime_has_branch = any(
+        (n.get("attrs") or {}).get("branch") for n in runtime.nodes())
+    runtime_has_reduce = any(
+        (n.get("attrs") or {}).get("reduce") for n in runtime.nodes())
+
     # 3) static-only nodes (structure the runtime never saw — e.g. a branch fan
-    #    or a vote stage). BUT drop unmatched declared-dim nodes: those exist only
-    #    for the static pre-check and are redundant with runtime module nodes, so
-    #    an unmatched one is a layer that didn't run (e.g. an unused fallback
-    #    class) — keeping it would float a stray node in the real trace.
+    #    or a vote stage when there were NO runtime hints). Drop the ones that are
+    #    redundant with what the runtime already captured:
+    #    - declared-dim nodes (the static pre-check; redundant with runtime modules)
+    #    - branch/reduce stages already present as runtime branch/reduce markers
     for st in static.nodes():
         if st["id"] in matched_static_ids:
             continue
-        if (st.get("attrs") or {}).get("declared_dim"):
+        attrs = st.get("attrs") or {}
+        if attrs.get("declared_dim"):
+            continue
+        if attrs.get("branch") and runtime_has_branch:
+            continue
+        if attrs.get("reduce") and runtime_has_reduce:
             continue
         fused.add_node(
             st["id"], kind=st["kind"], name=st["name"], parent=st.get("parent"),
             source="static", loc=st.get("loc"), meta=st.get("meta"),
-            attrs=st.get("attrs"),
+            attrs=attrs,
         )
 
     return fused
