@@ -89,6 +89,11 @@
           "type": "string",
           "default": "",
           "description": "OpenAI-compatible API base URL for the LLM assistant (e.g. https://openrouter.ai/api/v1, https://api.openai.com/v1, or a local server). Blank uses OpenRouter."
+        },
+        "netscope.liveStatic": {
+          "type": "boolean",
+          "default": true,
+          "description": "Live-update the static graph skeleton + wiring-mismatch squiggles as you edit/save a Python file (no execution). Real tensor shapes still require Run & Trace."
         }
       }
     }

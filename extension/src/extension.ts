@@ -18,8 +18,9 @@ import { NVGraph } from "./ir";
 import { mergeByLoc } from "./mergeByLoc";
 import { toElements } from "./render";
 import { ShapeHints, onDidChangeInlayHints } from "./inlayHints";
+import { refreshShapeDecorations } from "./shapeDecorations";
 import * as diagnostics from "./diagnostics";
-import { setTrace, clearTrace } from "./traceStore";
+import { setTrace, clearTrace, getTrace } from "./traceStore";
 
 function cwd(): string | undefined {
   return vscode.workspace.workspaceFolders?.[0].uri.fsPath;
@@ -101,6 +102,20 @@ async function runStatic(file: string): Promise<NVGraph | null> {
   } catch {
     return null;
   }
+}
+
+// Static analysis WITHOUT a progress notification — for the live-on-save/type
+// refresh, which fires often and must stay invisible (no popup spam, no errors;
+// a parse failure just yields null and the previous overlays linger).
+function runStaticQuiet(file: string): Promise<NVGraph | null> {
+  return new Promise((resolve) => {
+    cp.execFile(pythonPath(), ["-m", "netscope.static", file],
+      { cwd: cwd(), env: process.env, maxBuffer: 32 * 1024 * 1024 },
+      (err: any, stdout: string) => {
+        if (err) { resolve(null); return; }
+        try { resolve(JSON.parse(stdout) as NVGraph); } catch { resolve(null); }
+      });
+  });
 }
 
 async function runAndTrace(file: string): Promise<NVGraph | null> {
@@ -277,6 +292,8 @@ function vendorScripts(ctx: vscode.ExtensionContext): string {
 let panel: vscode.WebviewPanel | undefined;
 let lastTracedFile: string | undefined;   // the file behind the current graph, for isolate
 let currentGraph: NVGraph | undefined;     // the graph in the panel, for the LLM assistant
+let currentGraphFile: string | undefined;  // which file the panel is showing
+let currentGraphTag: string | undefined;   // "static" | "runtime" | "fused" | "isolate:…"
 
 function show(ctx: vscode.ExtensionContext, graph: NVGraph, title: string): void {
   if (!panel) {
@@ -315,6 +332,11 @@ function show(ctx: vscode.ExtensionContext, graph: NVGraph, title: string): void
     });
   }
   currentGraph = graph;   // the LLM assistant asks about THIS graph
+  // remember what the panel shows (title is "<file> (<tag>)") so live-static can
+  // refresh a static skeleton without overwriting a richer fused/runtime view.
+  const _m = /^(.*) \(([^)]+)\)$/.exec(title);
+  currentGraphTag = _m ? _m[2] : undefined;
+  currentGraphFile = graph.nodes.find((n) => n.loc && n.loc.file)?.loc?.file;
   const tpl = fs.readFileSync(templatePath(ctx), "utf-8");
   const elements = JSON.stringify(toElements(graph));
   const n = nonce();
@@ -354,8 +376,9 @@ class Lenses implements vscode.CodeLensProvider {
 const diagCollection = diagnostics.makeCollection();
 
 function applyEditorOverlays(file: string, graph: NVGraph): void {
-  setTrace(file, graph);                       // shape hints read this
-  onDidChangeInlayHints.fire();                // re-query inlay hints
+  setTrace(file, graph);                       // hints + decorations read this
+  onDidChangeInlayHints.fire();                // re-query inlay hints (if enabled)
+  refreshShapeDecorations();                   // ...and decorations (always visible)
   for (const doc of vscode.workspace.textDocuments) {
     if (doc.fileName === file) diagnostics.publish(diagCollection, doc, graph);
   }
@@ -447,26 +470,55 @@ export function activate(ctx: vscode.ExtensionContext): void {
       await ctx.secrets.delete(SECRET_KEY);
       vscode.window.showInformationMessage("netscope: stored LLM API key cleared.");
     }),
-    // a trace goes stale as the file changes — but clearing overlays on EVERY
-    // keystroke (even a comment) is jarring. Debounce: drop the overlays ~500ms
-    // after the user stops typing in that file, so the shapes/squiggles linger
-    // through a burst of edits and only vanish once the source has really moved.
+    // LIVE STATIC: as you edit, the REAL tensor shapes go stale (they only exist
+    // after a run) — but the static structure + dim-mismatch squiggles DON'T need
+    // execution, so we can refresh them live. Debounced ~600ms after you stop
+    // typing: drop the stale runtime shape hints, then re-run static analysis and
+    // re-publish the wiring-clash squiggles. (Toggle: netscope.liveStatic.)
     vscode.workspace.onDidChangeTextDocument((e) => {
-      const file = e.document.fileName;
-      const uri = e.document.uri;
+      if (e.document.languageId !== "python") return;
+      const doc = e.document;
+      const file = doc.fileName;
       const prev = staleTimers.get(file);
       if (prev) clearTimeout(prev);
       staleTimers.set(file, setTimeout(() => {
-        clearTrace(file);
-        diagnostics.clear(diagCollection, uri);
-        onDidChangeInlayHints.fire();
         staleTimers.delete(file);
-      }, 500));
-    })
+        // the runtime shapes are now stale -> drop the shape decorations/hints.
+        const stale = getTrace(file);
+        const hadRuntimeShapes = !!stale && stale.nodes.some((n) => (n.meta || {}).out_shape);
+        if (hadRuntimeShapes) {
+          clearTrace(file);
+          onDidChangeInlayHints.fire();
+          refreshShapeDecorations();
+        }
+        liveStaticRefresh(ctx, doc);   // re-check structure + squiggles, no run
+      }, 600));
+    }),
+    // also refresh static on SAVE (immediate, not debounced) — saving is an
+    // explicit "I'm done with this edit" signal.
+    vscode.workspace.onDidSaveTextDocument((doc) => {
+      if (doc.languageId === "python") liveStaticRefresh(ctx, doc);
+    }),
+    vscode.window.onDidChangeVisibleTextEditors(() => refreshShapeDecorations())
   );
 }
 
 const staleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+// Re-run static analysis for `doc` (no execution) and update its mismatch
+// squiggles + (if the panel is showing this file's static graph) the skeleton.
+// Off when netscope.liveStatic is disabled.
+async function liveStaticRefresh(ctx: vscode.ExtensionContext, doc: vscode.TextDocument): Promise<void> {
+  if (!vscode.workspace.getConfiguration("netscope").get<boolean>("liveStatic", true)) return;
+  const g = await runStaticQuiet(doc.fileName);
+  if (!g) return;
+  diagnostics.publish(diagCollection, doc, g);   // wiring-clash squiggles, live
+  // if the panel is currently showing THIS file's static skeleton, redraw it so
+  // it tracks the source. Don't clobber a richer runtime/fused view of the file.
+  if (panel && currentGraphFile === doc.fileName && currentGraphTag === "static" && g.nodes.length > 1) {
+    show(ctx, g, `${path.basename(doc.fileName)} (static)`);
+  }
+}
 
 export function deactivate(): void {
   panel?.dispose();

@@ -27,7 +27,9 @@ const codeLensProviders = [];
 const inlayProviders = [];
 const diagnosticsByUri = new Map();   // fsPath -> Diagnostic[]
 const changeHandlers = [];
+const saveHandlers = [];
 const mockLlmConfig = {};             // netscope.llm settings, set per-test
+let mockLiveStatic = true;            // netscope.liveStatic toggle
 let nextInputBoxValue = undefined;    // what showInputBox returns next
 
 const vscode = {
@@ -42,21 +44,28 @@ const vscode = {
   InlayHintKind: { Type: 1, Parameter: 2 },
   Diagnostic: class { constructor(range, message, severity) { this.range = range; this.message = message; this.severity = severity; } },
   DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
+  ThemeColor: class { constructor(id) { this.id = id; } },
   workspace: {
     workspaceFolders: [{ uri: { fsPath: REPO_ROOT } }],
     getConfiguration: (section) => ({
-      get: (k) => {
+      get: (k, dflt) => {
         if (section === "netscope.llm") return (mockLlmConfig[k] !== undefined ? mockLlmConfig[k] : "");
-        return k === "pythonPath" ? VENV_PY : undefined;
+        if (k === "pythonPath") return VENV_PY;
+        if (k === "liveStatic") return mockLiveStatic;
+        return dflt;
       },
     }),
     openTextDocument: async (p) => ({ fileName: p }),
     textDocuments: [],        // populated per-test with a mock document
     onDidChangeTextDocument: (cb) => { changeHandlers.push(cb); return { dispose() {} }; },
+    onDidSaveTextDocument: (cb) => { saveHandlers.push(cb); return { dispose() {} }; },
   },
   ProgressLocation: { Notification: 15 },
   window: {
     activeTextEditor: { document: { fileName: DEMO, languageId: "python", uri: { fsPath: DEMO }, lineCount: 200, lineAt: (i) => ({ range: { start: { line: i, character: 0 }, end: { line: i, character: 0 } } }) } },
+    visibleTextEditors: [],
+    onDidChangeVisibleTextEditors: () => ({ dispose() {} }),
+    createTextEditorDecorationType: () => ({ dispose() {} }),
     showErrorMessage: () => {},
     showWarningMessage: async () => undefined,
     showInformationMessage: async () => undefined,
@@ -273,17 +282,49 @@ check("Run & Trace on a mismatch file publishes shape hints + a red squiggle", a
   vscode.window.activeTextEditor = { document: { fileName: DEMO, languageId: "python" } };
 });
 
-check("editing a traced file clears its stale squiggles (debounced)", async () => {
+check("editing re-runs LIVE static analysis (debounced), not just a clear", async () => {
+  // mismatch_demo's clash is a RUNTIME edge (added inside the trace), so the
+  // static pass sees no clash. Editing -> after the debounce, live-static
+  // re-analyzes and (finding no static clash) clears the now-stale runtime
+  // squiggle. The squiggle should linger briefly, then resolve.
   const doc = mockDoc(MISMATCH);
   assert.ok(changeHandlers.length >= 1, "no onDidChangeTextDocument handler");
+  assert.ok((diagnosticsByUri.get(MISMATCH) || []).length >= 1, "precondition: a squiggle is shown");
   changeHandlers[0]({ document: doc });
-  // overlays are now cleared on a 500ms debounce (not instantly, so a burst of
-  // edits doesn't thrash) — they should still be present right after the edit...
-  assert.ok((diagnosticsByUri.get(MISMATCH) || []).length >= 1, "squiggles should linger briefly");
-  // ...and gone after the debounce window.
-  await new Promise((r) => setTimeout(r, 650));
+  // it lingers right after the edit (debounced, not instant)...
+  assert.ok((diagnosticsByUri.get(MISMATCH) || []).length >= 1, "squiggle should linger briefly");
+  // ...and after the debounce + the quiet static re-run, the runtime-only clash
+  // is gone (static sees none on this file).
+  await new Promise((r) => setTimeout(r, 1200));
   const diags = diagnosticsByUri.get(MISMATCH) || [];
-  assert.strictEqual(diags.length, 0, "diagnostics should clear after the debounce");
+  assert.strictEqual(diags.length, 0, "runtime-only squiggle clears once live-static re-checks");
+});
+
+check("LIVE static squiggles a clash on SAVE without running (no trace needed)", async () => {
+  // a file with a STATIC wiring clash: saving it should publish a squiggle via
+  // the live-static path — no Run & Trace, no execution.
+  const bad = path.join(require("os").tmpdir(), "netscope_live_bad.py");
+  require("fs").writeFileSync(bad, [
+    "import torch.nn as nn",
+    "class Net(nn.Module):",
+    "    def __init__(self):",
+    "        super().__init__()",
+    "        self.a = nn.Linear(64, 256)",
+    "        self.b = nn.Linear(128, 10)",
+    "    def forward(self, x):",
+    "        h = self.a(x)",
+    "        return self.b(h)",
+    "",
+  ].join("\n"));
+  const doc = mockDoc(bad);
+  diagnosticsByUri.delete(bad);
+  assert.ok(saveHandlers.length >= 1, "no onDidSaveTextDocument handler");
+  await saveHandlers[0](doc);
+  // give the quiet static run a moment
+  await new Promise((r) => setTimeout(r, 400));
+  const diags = diagnosticsByUri.get(bad) || [];
+  assert.ok(diags.length >= 1, "saving a clashing file should squiggle it live (no run)");
+  assert.ok(/256.*128|128.*256/.test(diags[0].message), "message should name the clashing dims");
 });
 
 check("Show Graph squiggles a wiring clash WITHOUT running the file (M2)", async () => {
