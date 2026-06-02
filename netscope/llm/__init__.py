@@ -50,4 +50,12 @@ def explain(
     return provider.complete(messages, _transport=_transport)
 
 
-__all__ = ["available", "explain", "LLMUnavailable", "Provider", "build_messages"]
+def infer(graph, source: str, filename: str = "<source>"):
+    """Augment `graph` with LLM-inferred provisional structure (dashed, confidence-
+    scored) where the static AST couldn't recover it. No-op without a key."""
+    from netscope.llm.infer import infer_structure
+
+    return infer_structure(graph, source, filename)
+
+
+__all__ = ["available", "explain", "infer", "LLMUnavailable", "Provider", "build_messages"]

@@ -212,6 +212,16 @@ const cy = cytoscape({
         "text-background-opacity": 0.88, "text-background-padding": 3,
         "text-background-shape": "round-rectangle" } },
 
+    // --- LLM-inferred (provisional) nodes/edges: dashed + dimmer, so a GUESS
+    // never looks like a captured fact. Confidence rides in the detail panel.
+    { selector: "node[?inferred]", style: {
+        "border-style": "dashed", "border-width": 1.4, "border-opacity": 0.85,
+        "background-opacity": 0.5, "opacity": 0.78,
+        "underlay-opacity": 0.08 } },
+    { selector: 'edge[flow = "inferred"]', style: {
+        "line-style": "dashed", "line-dash-pattern": [5, 6], "opacity": 0.6,
+        "width": 1.6, "target-arrow-shape": "vee" } },
+
     { selector: "node.hi", style: {
         "underlay-opacity": 0.5, "underlay-padding": 12, "border-width": 2.2, "z-index": 99 } },
     { selector: "node:selected", style: {
@@ -469,6 +479,8 @@ function showPanel(d){
   if (m.device) row(rows,"device", m.device);
   if (d.prov) row(rows,"source", d.prov);
   const a=d.attrs||{};
+  if (a.inferred && typeof a.confidence==="number")
+    row(rows,"inferred", "LLM guess · "+Math.round(a.confidence*100)+"% conf");
   if (a.repeat) row(rows,"repeat", "x"+a.repeat);
   if (a.branch) row(rows,"role","branch");
   if (a.reduce) row(rows,"role","reduce / vote");
