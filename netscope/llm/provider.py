@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from typing import Callable, Dict, List, Optional
@@ -23,6 +24,12 @@ from typing import Callable, Dict, List, Optional
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 # a cheap, fast, widely-available default on OpenRouter; override via env/config.
 DEFAULT_MODEL = "google/gemini-2.0-flash-001"
+DEFAULT_TIMEOUT = 30          # seconds per attempt (was an un-tunable 60)
+DEFAULT_RETRIES = 2          # extra attempts after the first, on transient errors
+
+# transient server-side / network conditions worth retrying. A 4xx client error
+# (400 bad request, 401 bad key) is NOT retryable — it'll fail the same way again.
+RETRYABLE_STATUS = frozenset({408, 409, 429, 500, 502, 503, 504})
 
 # message = {"role": "system"|"user"|"assistant", "content": str}
 Message = Dict[str, str]
@@ -31,10 +38,12 @@ Message = Dict[str, str]
 Transport = Callable[[str, Dict[str, str], bytes], dict]
 
 
-def _http_transport(url: str, headers: Dict[str, str], body: bytes) -> dict:
-    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+def _make_http_transport(timeout: float) -> Transport:
+    def _http_transport(url: str, headers: Dict[str, str], body: bytes) -> dict:
+        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    return _http_transport
 
 
 class Provider:
@@ -71,32 +80,55 @@ class Provider:
         *,
         temperature: float = 0.2,
         max_tokens: int = 700,
+        timeout: float = DEFAULT_TIMEOUT,
+        retries: int = DEFAULT_RETRIES,
+        backoff_base: float = 0.8,
         _transport: Optional[Transport] = None,
+        _sleep: Callable[[float], None] = time.sleep,
     ) -> str:
-        """POST the chat-completion and return the assistant's text. Raises
-        RuntimeError on a transport/format failure (callers gate on available())."""
-        transport = _transport or _http_transport
+        """POST the chat-completion and return the assistant's text.
+
+        Retries transient failures (429/503/timeout/…) up to `retries` times with
+        exponential backoff; a client error (400/401) is NOT retried. Raises
+        RuntimeError after the final failure (callers gate on available())."""
+        transport = _transport or _make_http_transport(timeout)
         url = f"{self.base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             **self.extra_headers,
         }
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        body = json.dumps(payload).encode("utf-8")
-        try:
-            data = transport(url, headers, body)
-        except urllib.error.HTTPError as e:  # surface a readable error
-            detail = e.read().decode("utf-8", "replace")[:300] if hasattr(e, "read") else str(e)
-            raise RuntimeError(f"LLM request failed ({e.code}): {detail}") from e
-        except Exception as e:
-            raise RuntimeError(f"LLM request failed: {e}") from e
-        try:
-            return data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as e:
-            raise RuntimeError(f"unexpected LLM response shape: {str(data)[:200]}") from e
+        body = json.dumps({
+            "model": self.model, "messages": messages,
+            "temperature": temperature, "max_tokens": max_tokens,
+        }).encode("utf-8")
+
+        last_err: Optional[Exception] = None
+        for attempt in range(retries + 1):
+            try:
+                data = transport(url, headers, body)
+            except urllib.error.HTTPError as e:
+                detail = ""
+                try:
+                    detail = e.read().decode("utf-8", "replace")[:300]
+                except Exception:
+                    detail = str(e)
+                last_err = RuntimeError(f"LLM request failed ({e.code}): {detail}")
+                if e.code in RETRYABLE_STATUS and attempt < retries:
+                    _sleep(backoff_base * (2 ** attempt))
+                    continue
+                raise last_err from e
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                # network / timeout — transient, retry.
+                last_err = RuntimeError(f"LLM request failed: {e}")
+                if attempt < retries:
+                    _sleep(backoff_base * (2 ** attempt))
+                    continue
+                raise last_err from e
+            except Exception as e:
+                raise RuntimeError(f"LLM request failed: {e}") from e
+            try:
+                return data["choices"][0]["message"]["content"]
+            except (KeyError, IndexError, TypeError) as e:
+                raise RuntimeError(f"unexpected LLM response shape: {str(data)[:200]}") from e
+        raise last_err or RuntimeError("LLM request failed")

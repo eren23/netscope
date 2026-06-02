@@ -65,8 +65,15 @@ def _neighbours_block(graph, node_id: str) -> str:
         if e["src"] == node_id and e["dst"] in by_id:
             outs.append(by_id[e["dst"]])
 
-    def names(ns):
-        return ", ".join((n.get("meta") or {}).get("qualname") or n["name"] for n in ns) or "(none)"
+    def names(ns, cap=8):
+        # cap the list so a hub node with hundreds of neighbours doesn't blow the
+        # context budget; note how many were elided.
+        labels = [(n.get("meta") or {}).get("qualname") or n["name"] for n in ns]
+        if not labels:
+            return "(none)"
+        if len(labels) > cap:
+            return ", ".join(labels[:cap]) + f", …and {len(labels) - cap} more"
+        return ", ".join(labels)
 
     return f"upstream (feeds in): {names(ins)}\ndownstream (consumes): {names(outs)}"
 
@@ -94,7 +101,10 @@ def _source_block(node: dict, context: int = 2) -> Optional[str]:
     out = []
     for i in range(lo, hi + 1):
         marker = ">" if i == line else " "
-        out.append(f"{marker} {i}: {src[i - 1]}")
+        text = src[i - 1]
+        if len(text) > 200:            # clip a pathological long line (minified/data)
+            text = text[:200] + "…"
+        out.append(f"{marker} {i}: {text}")
     return "source near " + loc["file"].split("/")[-1] + ":\n" + "\n".join(out)
 
 
