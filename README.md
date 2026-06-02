@@ -132,6 +132,32 @@ server. It's entirely optional: with no key, every other feature works offline.
       print(nl.explain(graph, node_id, question="why_warn"))
   ```
 
+## MCP server — ground your coding agent in the real graph
+
+netscope ships an **MCP server** so a coding agent (Cursor, Claude Code, …) can
+query your model's *real* structure instead of guessing — "what actually flows
+into `model.layers.2`?", "are there wiring mismatches in this file?". It's
+stdlib-only (JSON-RPC over stdio, no extra deps) and needs no LLM key for the
+first three tools.
+
+Tools: **`trace_file`** (graph of a file — static, or a real run), **`query_node`**
+(a node's real shapes / dtype / neighbours / mismatch), **`list_mismatches`**
+(wiring clashes as structured data + source loc), **`explain_node`** (grounded
+Q&A, if an LLM key is set).
+
+Register the command `python -m netscope.mcp` with your agent. For example, in a
+`.cursor/mcp.json` (or Claude Code's MCP config):
+
+```json
+{
+  "mcpServers": {
+    "netscope": { "command": "/path/to/.venv/bin/python", "args": ["-m", "netscope.mcp"] }
+  }
+}
+```
+
+See `examples/mcp_server_demo.py` for the tools driven in-process.
+
 ## Architecture
 
 ```
