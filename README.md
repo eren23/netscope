@@ -99,13 +99,64 @@ with netscope.reduce("vote"):    winner = majority(cands)
 
 `extension/` is a TypeScript extension that renders the graph in the editor:
 **Show Graph** (static skeleton, no run) and **Run & Trace** (real graph, fused
-by source location), with click-a-node → jump-to-line.
+by source location), with click-a-node → jump-to-line. After a trace you also get
+**inline shape hints** (each layer's real tensor shape as ghost text on its line),
+**mismatch squiggles** (shape clashes underlined in red — even from the static
+pass, before you run), and an **LLM assistant** on the node panel
+(`explain` / `why flagged` / `suggest fix`, grounded in the real trace).
 
 ```bash
 cd extension && npm install && npm run compile
 # then press F5 in the extension/ folder ("Run netscope Extension"),
 # set netscope.pythonPath to your venv, open a file, click the CodeLens.
 ```
+
+Keyboard: **⌘⌥T** / **Ctrl+Alt+T** = Run & Trace, **⌘⌥G** / **Ctrl+Alt+G** = Show Graph.
+
+### LLM assistant (optional)
+
+The assistant talks to **any OpenAI-compatible endpoint** — OpenRouter by default
+(→ many cheap models like Gemini Flash), or OpenAI / Together / Groq / a local
+server. It's entirely optional: with no key, every other feature works offline.
+
+- **In the editor:** run **`netscope: Set LLM API Key`** from the command palette.
+  Your key is stored in the **OS keychain** (VSCode SecretStorage) — never in
+  `settings.json`, never synced, never in git. Pick the model / endpoint via the
+  `netscope.llm.model` and `netscope.llm.baseUrl` settings (these are not secret).
+- **From the library / scripts:** set an env var instead —
+  `OPENROUTER_API_KEY` (or `NETSCOPE_LLM_API_KEY` / `OPENAI_API_KEY`), with
+  optional `NETSCOPE_LLM_MODEL` and `NETSCOPE_LLM_BASE_URL`. Then:
+  ```python
+  import netscope.llm as nl
+  if nl.available():
+      print(nl.explain(graph, node_id, question="why_warn"))
+  ```
+
+## MCP server — ground your coding agent in the real graph
+
+netscope ships an **MCP server** so a coding agent (Cursor, Claude Code, …) can
+query your model's *real* structure instead of guessing — "what actually flows
+into `model.layers.2`?", "are there wiring mismatches in this file?". It's
+stdlib-only (JSON-RPC over stdio, no extra deps) and needs no LLM key for the
+first three tools.
+
+Tools: **`trace_file`** (graph of a file — static, or a real run), **`query_node`**
+(a node's real shapes / dtype / neighbours / mismatch), **`list_mismatches`**
+(wiring clashes as structured data + source loc), **`explain_node`** (grounded
+Q&A, if an LLM key is set).
+
+Register the command `python -m netscope.mcp` with your agent. For example, in a
+`.cursor/mcp.json` (or Claude Code's MCP config):
+
+```json
+{
+  "mcpServers": {
+    "netscope": { "command": "/path/to/.venv/bin/python", "args": ["-m", "netscope.mcp"] }
+  }
+}
+```
+
+See `examples/mcp_server_demo.py` for the tools driven in-process.
 
 ## Architecture
 

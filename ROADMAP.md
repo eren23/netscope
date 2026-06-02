@@ -5,6 +5,11 @@ pipelines — as you write them.** v0.1 nails *trace + visualize + show-errors*.
 The road ahead is mostly about the **"as you write"** half (live, in-editor) and
 an **LLM-augmented** layer that reaches where deterministic analysis can't.
 
+We ship this in **small 0.1.x increments**, not a big-bang 0.2 — each milestone is
+independently useful and independently releasable. The keystone is a cheap
+library fix (give every traced node a source `loc`) that unlocks the whole
+editor-live experience.
+
 ## v0.1.0 — shipped ✅
 
 The full loop works, run-triggered:
@@ -30,41 +35,79 @@ that one IR — nothing bolted on the side.
 
 ---
 
-## v0.2 — "as you write" + the LLM layer (built together)
+## The 0.1.x line — "as you write" in the editor
 
-The differentiator and the LLM layer reinforce each other, so they grow in
-parallel. The static skeleton gives the LLM ground truth; the LLM fills the gaps
-the AST can't reach.
+Bring the trace's real shapes + mismatch warnings onto the line, in the editor,
+without leaving the file. Ordered so each step is shippable and the cheap,
+high-impact, LLM-free wins come first.
 
-### Live static engine (deterministic core)
-- **On-type skeleton.** Parse the file as you type → draw the architecture
-  *before* you run. Overlay real shapes after a trace (the static⊕runtime fusion
-  the whole design was built around).
-- **Inline shape hints.** Each layer's real tensor shape as a ghost annotation on
-  its line (from the last trace). The biggest "whoa, as I type" moment; cheap —
-  we already have shapes + `loc`.
-- **Mismatches as editor squiggles.** Surface the shape/rank clashes we already
-  detect as red underlines on the offending line (VSCode diagnostics), not only
-  in the graph.
-- **Declared-dim checking.** Read `nn.Linear(256, 128)` etc. from source and flag
-  a wiring clash *before* a single forward runs.
+### M0 (0.1.1) — `loc` on every traced node *(keystone)*
+Runtime module nodes don't carry a source location today, so the editor can't map
+a node back to a line. New `netscope/static/module_loc.py` scans the model's
+defining file (`self.x = nn.Conv2d(...)`, `Sequential`/`ModuleList` index naming)
+to map each `meta.qualname` → `{file, line}`; the torch hook sets `loc` from it.
+Pure-AST, best-effort, never raises. **Unlocks inline hints, squiggles, AND fixes
+click-to-source at once.**
 
-### LLM-augmented layer (four jobs, one provider abstraction)
-1. **Augment static inference.** Where the AST gives up — dynamic indexing, custom
-   `forward`, exotic layers — ask an LLM to infer the likely shape/dataflow, drawn
-   as *provisional* (dashed) edges/nodes, clearly distinct from
-   runtime-confirmed ones. Confidence shown; never silently presented as fact.
-2. **Assistant over the graph.** "Explain this block", "why is this node red",
-   "suggest a fix for this mismatch" — grounded in the IR + the source slice, not
-   free-floating. Answers cite `loc`.
+### M1 (0.1.2) — inline shape hints + mismatch squiggles *(the headline)*
+Pure extension/TS on top of M0, no LLM:
+- **Inline shape hints (InlayHints).** Each layer's real `out_shape` as faint
+  end-of-line ghost text, from the last trace.
+- **Mismatches as squiggles (Diagnostics).** The `warnings` we already compute
+  (`checks.py`) rendered as red underlines on the offending line, not only in the
+  graph.
+
+### M2 (0.1.3) — declared-dim pre-check, no run required
+Extend the static AST producer to read `nn.Linear(in, out)` / `nn.Conv2d(...)`
+literal dims + `forward` call order and flag an obvious wiring clash *before* a
+single forward runs. Same `warnings` channel + diagnostics path as M1, tagged
+`source:"static"`. Conservative — literal + directly-wired only, no false alarms.
+
+### M3 (0.1.4) — LLM layer, entry point ✅
+**Assistant over the graph**, shipped. Click a node → "explain / why flagged /
+suggest fix", grounded in the node's IR slice (shapes, neighbours, the concrete
+warning) + the real source lines via `loc`. The model only ever annotates real
+netscope data — it can't invent architecture.
+
+- `netscope/llm/provider.py` — one thin client for ANY OpenAI-compatible
+  `/chat/completions` endpoint (stdlib `urllib`, no SDK/dependency). Default
+  gateway **OpenRouter** (→ many cheap models, e.g. Gemini Flash); point
+  `NETSCOPE_LLM_BASE_URL`/`_MODEL` at OpenAI / Together / Groq / a local server.
+- `netscope/llm/prompts.py` — the grounded message builder.
+- `netscope/llm/__init__.py` — `available()` / `explain(graph, node, question=)`
+  / `LLMUnavailable`; `python -m netscope.llm <graph.json> <node> <question>` CLI.
+- Env-keyed, **hard-gated**: no key → the layer is simply unavailable and the rest
+  of netscope works fully offline. Key precedence `NETSCOPE_LLM_API_KEY` →
+  `OPENROUTER_API_KEY` → `OPENAI_API_KEY`; netscope never stores it.
+- Extension: node-panel "ask" buttons → shells out to the CLI → answer rendered
+  in the panel.
+
+The other LLM jobs (augmented inference, MCP, generated views) follow below.
+
+### Adoption (alongside the above)
+- README GIFs, the sfumato hero figure, more demos.
+- Extension integration tests + CI (GitHub Actions: pytest + tsc + headless on
+  push; build + publish on a version tag).
+
+---
+
+## The LLM layer, in full (M3 and beyond)
+
+The static skeleton gives the LLM ground truth; the LLM fills the gaps the AST
+can't reach. Four jobs over one provider abstraction:
+
+1. **Assistant over the graph** *(M3, first)*. Explain / diagnose / suggest-fix,
+   grounded in IR + source slice. Answers cite `loc`.
+2. **Augment static inference.** Where the AST gives up — dynamic indexing, custom
+   `forward`, exotic layers — infer the likely shape/dataflow, drawn as
+   *provisional* (dashed) edges/nodes, distinct from runtime-confirmed ones.
+   Confidence shown; never silently presented as fact.
 3. **netscope as agent context (MCP).** Expose the live graph + real shapes as an
    MCP server so Cursor / Claude Code can ask *"what actually flows into this
-   layer?"* and get real captured shapes — grounding coding agents in reality
-   instead of guesses.
+   layer?"* and get real captured shapes — grounding coding agents in reality.
 4. **Generate custom views/analyzers.** Turn a prompt into a **declarative view
    spec** ("group by attention vs MLP", "highlight params > 1M", "color by
-   dtype") that the renderer applies. Specs, not arbitrary code — safe and
-   reproducible. This is the "make your own views" extensibility.
+   dtype") that the renderer applies. Specs, not arbitrary code — safe.
 
 Design rules for the LLM layer:
 - **Provider-agnostic.** A thin interface (Anthropic default; OpenAI/local
@@ -73,14 +116,9 @@ Design rules for the LLM layer:
   inferred elements are visually marked and confidence-scored.
 - **Offline-first core.** Everything in v0.1 keeps working with no LLM, no network.
 
-### Adoption
-- README GIFs, the sfumato hero figure, more demos.
-- Extension integration tests + CI (GitHub Actions: pytest + tsc + headless on
-  push; build + publish on a version tag).
-
 ---
 
-## v0.3+ — depth & reach
+## Later 0.1.x / v0.2 — depth & reach
 
 - **Trace diffing.** Compare two runs (before/after an edit, or two model
   variants): graph diff + shape diff. The iteration superpower.

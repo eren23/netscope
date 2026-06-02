@@ -27,11 +27,21 @@ export interface NVEdge {
   condition?: string | null;
 }
 
+export interface NVWarning {
+  src: string;
+  dst: string;
+  detail: string;
+  severity?: string;
+  kind?: string;
+  source?: string;
+}
+
 export interface NVGraph {
   schema_version: string;
   name: string;
   nodes: NVNode[];
   edges: NVEdge[];
+  warnings?: NVWarning[];
 }
 
 export function locKey(loc: Loc | null): string | null {

@@ -19,6 +19,7 @@ metadata (shape) + a weakref, never a strong reference, so nothing is retained.
 """
 from __future__ import annotations
 
+import inspect
 import os
 import weakref
 from typing import Iterator, Optional
@@ -26,6 +27,34 @@ from typing import Iterator, Optional
 from netscope.core import context as ctx
 from netscope.core import registry
 from netscope.enrich.params import own_params
+
+
+def _root_qualname_locs(root) -> dict:
+    """Build {qualname: {file, line}} for `root`'s submodules by statically
+    scanning the source file that defines root's class. Best-effort: returns {}
+    on any failure (no source, C-defined, parse error) so the tracer falls back
+    to loc=None. Reused by click-to-source, inline shape hints, and squiggles.
+
+    The root module itself has qualname "" (it's no submodule of anything), so it
+    has no `self.x = ...` line; we map "" to the root's CLASS DEFINITION line, so a
+    directly-called custom module (Encoder(), ClassifierHead()) still gets a loc.
+    """
+    try:
+        from netscope.static.module_loc import qualname_locs_for_file
+
+        src_file = inspect.getsourcefile(type(root))
+        if not src_file:
+            return {}
+        locs = qualname_locs_for_file(src_file)
+        if "" not in locs:
+            try:
+                _, line = inspect.getsourcelines(type(root))
+                locs[""] = {"file": src_file, "line": line}
+            except (OSError, TypeError):
+                pass
+        return locs
+    except Exception:
+        return {}
 
 
 def _is_tensor(x) -> bool:
@@ -41,14 +70,61 @@ def _shape(x) -> Optional[list]:
     return list(x.shape) if _is_tensor(x) else None
 
 
-def _iter_tensors(obj) -> Iterator:
-    """Yield tensors found directly in obj or one level inside a tuple/list."""
+def _dtype(x) -> Optional[str]:
+    """A short dtype name ('float32', 'float16', ...) or None for non-tensors."""
+    if not _is_tensor(x):
+        return None
+    try:
+        return str(x.dtype).split(".")[-1]   # 'torch.float32' -> 'float32'
+    except Exception:
+        return None
+
+
+def _device(x) -> Optional[str]:
+    """The device a tensor lives on ('cpu', 'cuda:0', ...) or None."""
+    if not _is_tensor(x):
+        return None
+    try:
+        return str(x.device)
+    except Exception:
+        return None
+
+
+def _first_tensor(obj):
+    """The first tensor reachable in obj (descending dict/tuple/list), or None.
+    Used to read dtype/device off a module's representative input/output."""
+    for t in _iter_tensors(obj):
+        return t
+    return None
+
+
+def _iter_tensors(obj, _depth: int = 0) -> Iterator:
+    """Yield every tensor reachable in obj, descending tuple/list/dict (bounded
+    depth). HuggingFace modules return dicts / ModelOutput (a Mapping) and nested
+    tuples, so a one-level scan dropped their producer edges — walk the structure.
+    """
+    if _depth > 6:
+        return
     if _is_tensor(obj):
         yield obj
     elif isinstance(obj, (tuple, list)):
         for item in obj:
-            if _is_tensor(item):
-                yield item
+            yield from _iter_tensors(item, _depth + 1)
+    elif isinstance(obj, dict):
+        for item in obj.values():
+            yield from _iter_tensors(item, _depth + 1)
+    else:
+        # ModelOutput / dataclass-like: expose tensors via .values() or vars().
+        # Guard tightly so we never iterate something huge or stateful.
+        values = getattr(obj, "values", None)
+        if callable(values) and not _is_tensor(obj):
+            try:
+                items = list(values())
+            except Exception:
+                items = None
+            if items is not None:
+                for item in items:
+                    yield from _iter_tensors(item, _depth + 1)
 
 
 def _freeze(obj):
@@ -120,6 +196,7 @@ class TorchForwardInstrumentor:
         pending: list = []      # stack of SpanHandle (sync, nested execution)
         producers: dict = {}    # id(tensor) -> (node_id, weakref(tensor))
         id2name: dict = {}      # id(submodule) -> qualified name, per top-level fwd
+        qual2loc: dict = {}     # qualname -> {file, line}, per top-level fwd
         extra: list = []        # per-module hooks attached for isolation (removed on exit)
         isolate_target = os.environ.get("NETSCOPE_ISOLATE") or None
 
@@ -137,6 +214,11 @@ class TorchForwardInstrumentor:
                         id2name[id(m)] = nm
                 except Exception:
                     pass
+                # ...and map each qualname -> the source line it's constructed on,
+                # so every node gets a `loc` (click-to-source + inline hints +
+                # mismatch squiggles all key off this). Best-effort, static-only.
+                qual2loc.clear()
+                qual2loc.update(_root_qualname_locs(module))
                 # isolation: attach a per-module pre-hook to the target module so
                 # we capture its REAL positional AND keyword inputs (the global
                 # hook above is positional-only). Targeted -> zero cost otherwise.
@@ -149,12 +231,28 @@ class TorchForwardInstrumentor:
                         extra.append(_attach_isolation_capture(cap, target, isolate_target))
             qualname = id2name.get(id(module))
             meta = {"params": own_params(module)}
-            in_shape = _shape(args[0]) if args else None
+            in_t = _first_tensor(args)
+            in_shape = _shape(in_t)
             if in_shape is not None:
                 meta["in_shape"] = in_shape
-            if qualname:
-                meta["qualname"] = qualname
-            handle = cap.open_span(type(module).__name__, kind="module", meta=meta)
+            # dtype/device read off the representative input tensor — lets the user
+            # see float16 vs float32 and cpu vs cuda placement (a real debugging
+            # need on mixed-precision / multi-GPU models).
+            dt, dev = _dtype(in_t), _device(in_t)
+            if dt is not None:
+                meta["dtype"] = dt
+            if dev is not None:
+                meta["device"] = dev
+            loc = None
+            # NB: a ROOT module's qualname is "" (it's nobody's submodule) — that's
+            # a valid name, not "missing", so test `is not None` rather than truth.
+            # Don't write an empty qualname into meta (it carries no info), but DO
+            # resolve its loc (the root's class-def line) so it's still clickable.
+            if qualname is not None:
+                if qualname:
+                    meta["qualname"] = qualname
+                loc = qual2loc.get(qualname)
+            handle = cap.open_span(type(module).__name__, kind="module", meta=meta, loc=loc)
             pending.append(handle)
             # dataflow: link the producer of each input tensor -> this module,
             # but only if the recorded weakref still points to the SAME tensor
@@ -175,11 +273,22 @@ class TorchForwardInstrumentor:
             if cap is None or not pending:
                 return
             handle = pending.pop()
-            out_shape = _shape(output)
-            cap.close_span(
-                handle,
-                meta_update={"out_shape": out_shape} if out_shape is not None else None,
-            )
+            # out_shape from the output if it's a bare tensor; for a tuple/dict
+            # output (MultiheadAttention, HF ModelOutput) fall back to the first
+            # reachable tensor so the node still shows a representative shape.
+            out_t = output if _is_tensor(output) else _first_tensor(output)
+            out_shape = _shape(out_t)
+            update = {}
+            if out_shape is not None:
+                update["out_shape"] = out_shape
+            # fill dtype/device from the output if the input didn't provide them.
+            n = cap.graph.get_node(handle.node_id)
+            cur_meta = n.get("meta") or {}
+            if "dtype" not in cur_meta and _dtype(out_t) is not None:
+                update["dtype"] = _dtype(out_t)
+            if "device" not in cur_meta and _device(out_t) is not None:
+                update["device"] = _device(out_t)
+            cap.close_span(handle, meta_update=update or None)
             for t in _iter_tensors(output):
                 try:
                     producers[id(t)] = (handle.node_id, weakref.ref(t))
@@ -199,8 +308,14 @@ class TorchForwardInstrumentor:
         for h in flat:
             try:
                 h.remove()
-            except Exception:
-                pass
+            except Exception as e:
+                # a hook that won't remove would fire on the NEXT session with a
+                # dead capture -> warn (don't silently leak it). Keep going so one
+                # bad handle doesn't strand the rest.
+                import warnings
+
+                warnings.warn(f"netscope: failed to remove a torch hook: {e}",
+                              RuntimeWarning, stacklevel=2)
 
 
 def register() -> None:

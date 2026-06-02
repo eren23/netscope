@@ -120,6 +120,11 @@ def analyze_source(source: str, filename: str = "<unknown>") -> NVGraph:
     tree = ast.parse(source)
     counter_vars = _counter_var_names(tree)
     _Visitor(g, filename, counter_vars).visit(tree)
+    # declared-dim pre-check: emit module nodes carrying literal layer dims +
+    # wiring edges, so detect_mismatches flags a clash BEFORE any run.
+    from netscope.static.dims import add_declared_dims
+
+    add_declared_dims(g, source, filename)
     return g
 
 

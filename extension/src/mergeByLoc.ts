@@ -17,10 +17,14 @@ export function mergeByLoc(runtime: NVGraph, staticG: NVGraph): NVGraph {
   const matchedStatic = new Set<string>();
   const nodes: NVNode[] = [];
 
-  // 1) runtime nodes, fused with any static node sharing their loc
+  // 1) runtime nodes, fused with any static node sharing their loc. A static
+  //    node fuses into AT MOST ONE runtime node (first match wins) — two runtime
+  //    nodes can share a loc (a submodule called twice / a loop body), and
+  //    duplicating the static attrs across both is wrong. Mirrors core/merge.py.
   for (const rt of runtime.nodes) {
     const k = locKey(rt.loc);
-    const st = k ? staticByLoc.get(k) : undefined;
+    let st = k ? staticByLoc.get(k) : undefined;
+    if (st && matchedStatic.has(st.id)) st = undefined;
     const attrs = { ...rt.attrs };
     let source = rt.source;
     if (st) {
@@ -31,9 +35,22 @@ export function mergeByLoc(runtime: NVGraph, staticG: NVGraph): NVGraph {
     nodes.push({ ...rt, source, attrs });
   }
 
-  // 2) static-only nodes (structure the runtime never saw — e.g. un-run branches)
+  // does the runtime already have branch/reduce stages (the user's branch()/
+  // reduce() hint markers — no loc, so they never loc-match)? If so the static
+  // AST's "branch loop"/"vote" are redundant duplicates that would float as
+  // disconnected strays in the fused view.
+  const rtHasBranch = runtime.nodes.some((n) => (n.attrs || ({} as any)).branch);
+  const rtHasReduce = runtime.nodes.some((n) => (n.attrs || ({} as any)).reduce);
+
+  // 2) static-only nodes (structure the runtime never saw). Drop the redundant
+  //    ones: declared-dim nodes, and branch/reduce stages the runtime already
+  //    captured. Mirrors netscope/core/merge.py.
   for (const st of staticG.nodes) {
     if (matchedStatic.has(st.id)) continue;
+    const a = (st.attrs || ({} as any));
+    if (a.declared_dim) continue;
+    if (a.branch && rtHasBranch) continue;
+    if (a.reduce && rtHasReduce) continue;
     nodes.push({ ...st, source: "static" });
   }
 
@@ -45,10 +62,14 @@ export function mergeByLoc(runtime: NVGraph, staticG: NVGraph): NVGraph {
     if (ids.has(e.src) && ids.has(e.dst)) edges.push(e);
   }
 
+  // carry warnings through: the shape/rank mismatches are computed on the runtime
+  // trace (real shapes), and the editor's squiggles read them off the fused graph.
+  // Dropping them here is why mismatches rendered in the graph but not on the line.
   return {
     schema_version: runtime.schema_version || staticG.schema_version,
     name: runtime.name || staticG.name,
     nodes,
     edges,
+    warnings: [...(runtime.warnings || []), ...(staticG.warnings || [])],
   };
 }

@@ -98,6 +98,15 @@
   #panel .loc { margin-top:14px; font-size:11px; color:var(--stage); cursor:pointer;
     border-top:1px solid var(--hair); padding-top:11px; letter-spacing:.04em; }
   #panel .loc:hover { text-decoration:underline; }
+  #panel .ask { margin-top:14px; display:flex; flex-wrap:wrap; gap:6px;
+    border-top:1px solid var(--hair); padding-top:12px; }
+  #panel .askbtn { font:inherit; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    cursor:pointer; padding:5px 9px; border-radius:5px; border:1px solid var(--hair);
+    background:transparent; color:var(--ink-dim); }
+  #panel .askbtn:hover { color:var(--ink); border-color:var(--stage); }
+  #panel .answer { margin-top:10px; font-size:12px; line-height:1.5; color:var(--ink);
+    white-space:pre-wrap; background:rgba(255,255,255,.03); border-radius:6px;
+    padding:10px 12px; border:1px solid var(--hair); }
   .pclose { position:absolute; top:11px; right:13px; color:var(--ink-dim); cursor:pointer;
     font-size:15px; line-height:1; }
   .pclose:hover { color:var(--ink); }
@@ -108,6 +117,11 @@
     color:var(--ink-dim); background:rgba(255,255,255,0.03); border:1px solid var(--hair);
     border-radius:7px; padding:5px 10px; cursor:pointer; transition:all .14s; }
   .hbtn:hover { color:var(--stage); border-color:var(--stage); background:rgba(34,211,238,0.08); }
+  .vinput { font-family:var(--mono); font-size:10px; color:var(--ink); background:rgba(255,255,255,0.04);
+    border:1px solid var(--hair); border-radius:7px; padding:5px 9px; width:200px; outline:none;
+    transition:all .14s; }
+  .vinput::placeholder { color:var(--ink-dim); text-transform:none; letter-spacing:0; }
+  .vinput:focus { border-color:var(--stage); background:rgba(34,211,238,0.06); width:240px; }
   #hud .live { margin-left:0; }
 </style>
 </head>
@@ -122,6 +136,8 @@
   <span class="hbtns">
     <button class="hbtn" id="btn-expand">⊕ expand all</button>
     <button class="hbtn" id="btn-collapse">⊖ collapse all</button>
+    <input class="vinput" id="view-input" type="text" placeholder="view: e.g. highlight attention" />
+    <button class="hbtn" id="btn-view-clear" title="clear view">✕</button>
   </span>
   <span class="warnpill" id="warnpill" title="shape mismatches">⚠ <span id="warncount">0</span></span>
   <span class="live"><span class="dot"></span> tracing</span>
@@ -136,8 +152,10 @@
 __NETSCOPE_VENDOR__
 <script>
 const NETSCOPE_ELEMENTS = __NETSCOPE_ELEMENTS__;
-const KIND = { pipeline:"#8aa0b8", stage:"#22d3ee", model:"#34d399", module:"#f5b942", op:"#b98aff" };
-const KIND_DK = { pipeline:"#1a2330", stage:"#06303a", model:"#063528", module:"#3a2b08", op:"#241640" };
+// brighter, more saturated accents (the muted originals read as a wireframe)
+const KIND = { pipeline:"#9db8d4", stage:"#2ee6ff", model:"#34f5a8", module:"#ffc233", op:"#cf8bff" };
+// leaf fills: a touch richer + warmer so chips feel solid, not flat
+const KIND_DK = { pipeline:"#1b2738", stage:"#04323e", model:"#053a2c", module:"#3f2e07", op:"#281846" };
 const vscode = (typeof acquireVsCodeApi === "function") ? acquireVsCodeApi() : null;
 
 function shade(kind){ return KIND[kind] || "#5a6b7e"; }
@@ -167,16 +185,21 @@ const cy = cytoscape({
         "transition-property": "underlay-opacity underlay-padding border-width",
         "transition-duration": "140ms" } },
 
-    // compound containers (stages that hold modules) — BORDER ONLY, no fill and
-    // no underlay glow. Nested compounds would otherwise stack translucent fills
-    // and the accumulated alpha washes deep models orange. Outline-only keeps any
-    // depth readable as clean nested frames.
+    // compound containers (stages that hold modules) — depth-cued frames. Almost
+    // no fill (a hair of alpha that does NOT accumulate to orange across depth),
+    // with the OUTER frames drawn thicker + brighter and inner ones thinner, so
+    // the nesting reads at a glance instead of looking like identical boxes.
     { selector: ":parent", style: {
-        "background-opacity": 0,
-        "border-width": 1.2, "border-color": (e)=> shade(e.data("kind")), "border-opacity": 0.55,
+        "background-color": (e)=> shade(e.data("kind")),
+        "background-opacity": 0.022,
+        "border-width": (e)=> Math.max(1, 2.4 - nodeDepth(e) * 0.6),
+        "border-color": (e)=> shade(e.data("kind")),
+        "border-opacity": (e)=> Math.max(0.32, 0.82 - nodeDepth(e) * 0.16),
+        "corner-radius": 12,
         "label": "data(name)", "text-valign": "top", "text-halign": "center",
-        "text-margin-y": -6, "font-family": FONT, "font-size": 10, "text-transform": "uppercase",
-        "color": (e)=> shade(e.data("kind")), "padding": "18px" } },
+        "text-margin-y": -7, "font-family": FONT, "font-size": 10, "text-transform": "uppercase",
+        "font-weight": "bold", "text-opacity": (e)=> Math.max(0.5, 0.95 - nodeDepth(e) * 0.14),
+        "color": (e)=> shade(e.data("kind")), "padding": "20px" } },
 
     // edges: gradient source-kind -> target-kind, dashed for the marching pulse
     { selector: "edge", style: {
@@ -187,11 +210,36 @@ const cy = cytoscape({
         "line-style": "dashed", "line-dash-pattern": [3, 7], "line-cap": "round",
         "target-arrow-shape": "triangle", "target-arrow-fill": "filled",
         "target-arrow-color": (e)=> shade(e.target().data("kind")),
-        "arrow-scale": 0.95, "opacity": 0.9,
+        "arrow-scale": 0.95, "opacity": 0.92 } },
+    // the tensor-shape label ONLY on edges that have one — a bare `data(label)` on
+    // label-less edges triggers a cytoscape warning per edge (22 on sfumato).
+    { selector: "edge[label]", style: {
         "label": "data(label)", "font-family": FONT, "font-size": 9,
-        "color": "#9fb4c4", "text-background-color": "#06080c",
-        "text-background-opacity": 0.85, "text-background-padding": 3,
+        "color": "#aec3d4", "text-background-color": "#06080c",
+        "text-background-opacity": 0.88, "text-background-padding": 3,
         "text-background-shape": "round-rectangle" } },
+
+    // --- generated views: a prompt -> a declarative spec stamps these flags.
+    // vdim = filtered out (dimmed), vhi = highlighted, vcolor = recolored.
+    { selector: "node[?vdim]", style: { "opacity": 0.16 } },
+    { selector: "edge[?vdim]", style: { "opacity": 0.06 } },
+    { selector: "node[vcolor]", style: {
+        "border-color": "data(vcolor)", "border-width": 2.2, "border-opacity": 1,
+        "underlay-color": "data(vcolor)", "underlay-opacity": 0.28 } },
+    { selector: "node[?vhi]", style: {
+        "border-color": "#ffffff", "border-width": 2.6, "border-opacity": 1,
+        "underlay-color": "#2ee6ff", "underlay-opacity": 0.55, "underlay-padding": 13,
+        "z-index": 80 } },
+
+    // --- LLM-inferred (provisional) nodes/edges: dashed + dimmer, so a GUESS
+    // never looks like a captured fact. Confidence rides in the detail panel.
+    { selector: "node[?inferred]", style: {
+        "border-style": "dashed", "border-width": 1.4, "border-opacity": 0.85,
+        "background-opacity": 0.5, "opacity": 0.78,
+        "underlay-opacity": 0.08 } },
+    { selector: 'edge[flow = "inferred"]', style: {
+        "line-style": "dashed", "line-dash-pattern": [5, 6], "opacity": 0.6,
+        "width": 1.6, "target-arrow-shape": "vee" } },
 
     { selector: "node.hi", style: {
         "underlay-opacity": 0.5, "underlay-padding": 12, "border-width": 2.2, "z-index": 99 } },
@@ -201,16 +249,17 @@ const cy = cytoscape({
     { selector: ".dim", style: { "opacity": 0.18 } },
     { selector: "edge.dim", style: { "opacity": 0.06 } },
 
-    // --- mismatch warnings: paint the offending edge + its endpoints red ---
-    // (listed last so these win the per-property cascade over the base rules)
+    // --- mismatch warnings: paint the offending edge + its endpoints red, and
+    // make them impossible to miss — thick border + a strong glow that PULSES
+    // (animated in JS below). Listed last so they win the per-property cascade.
     { selector: "node[?warn]", style: {
-        "border-color": "#ff5a5f", "border-width": 2.6, "border-opacity": 1,
-        "underlay-color": "#ff5a5f", "underlay-opacity": 0.45, "underlay-padding": 10,
-        "color": "#ffe3e4" } },
+        "border-color": "#ff4d52", "border-width": 3.4, "border-opacity": 1,
+        "underlay-color": "#ff4d52", "underlay-opacity": 0.5, "underlay-padding": 14,
+        "color": "#ffe3e4", "z-index": 95 } },
     { selector: "edge[?warn]", style: {
-        "line-fill": "solid", "line-color": "#ff5a5f", "line-style": "solid",
-        "width": 3.4, "opacity": 1,
-        "target-arrow-color": "#ff5a5f", "color": "#ff9a9d", "z-index": 90 } }
+        "line-fill": "solid", "line-color": "#ff4d52", "line-style": "solid",
+        "width": 4, "opacity": 1,
+        "target-arrow-color": "#ff4d52", "color": "#ffb0b3", "z-index": 96 } }
   ]
 });
 
@@ -251,7 +300,23 @@ function runLayout(){
   }
   if (!ran){ cy.layout({ name:"cose", idealEdgeLength:90, nodeOverlap:24, gravity:0.3,
                          componentSpacing:120, ...common }).run(); }
-  cy.fit(undefined, 52);
+  fitNicely();
+}
+
+// Fit the graph so it fills the canvas and is centered — not a postage stamp
+// stranded in a sea of black. cy.fit() fits the LIMITING axis, so a wide-short
+// pipeline (1500x366 in a 1200x1170 canvas) fit-to-width leaves ~70% vertical
+// emptiness. We compute a zoom that targets ~82% of whichever axis is tighter
+// (clamped to a readable range), then dead-center it.
+function fitNicely(){
+  const bb = cy.elements().boundingBox();
+  if (!bb || !bb.w || !bb.h){ cy.fit(undefined, 48); return; }
+  const W = cy.width(), H = cy.height();
+  const fill = 0.84;                                  // use 84% of the canvas
+  let z = Math.min((W * fill) / bb.w, (H * fill) / bb.h);
+  z = Math.max(0.35, Math.min(1.6, z));               // readable bounds
+  cy.zoom(z);
+  cy.center();                                        // center the whole graph
 }
 window.cy = cy;  // expose for debugging / programmatic focus
 // True node count captured BEFORE any collapse — once a deep model is folded,
@@ -301,6 +366,44 @@ runLayout();
 // readable overview instead of dumping you zoomed-in to the middle of a giant
 // canvas (the "wall of orange" symptom). cy.fit is inside runLayout already.
 function relayout(){ try { runLayout(); } catch(_){ cy.fit(undefined, 52); } }
+
+// ---- generated views: apply a declarative spec (mirrors netscope/llm/views.py)
+// A prompt -> the extension fetches a validated spec -> we stamp vhi/vdim/vcolor
+// onto the live nodes here. Safe: a fixed set of ops, no eval.
+const _VPALETTE = ["#2ee6ff","#34f5a8","#ffc233","#cf8bff","#ff8d6b","#6ad1ff","#8affc2","#ffd98a","#e0a3ff","#ff5a5f"];
+function _vfield(n, f){ if(f==="kind")return n.data("kind"); if(f==="name")return n.data("name");
+  const m=n.data("meta")||{}; return m[f]; }
+function _vmatches(n, where){ where=where||{}; const m=n.data("meta")||{};
+  const keys=["kind","name_contains","params_gt","params_lt","dtype","device"];
+  if(!keys.some(k=> k in where)) return false;
+  if("kind" in where && n.data("kind")!==where.kind) return false;
+  if("name_contains" in where && !String(n.data("name")||"").toLowerCase().includes(String(where.name_contains).toLowerCase())) return false;
+  const p=m.params;
+  if("params_gt" in where && !(typeof p==="number" && p>where.params_gt)) return false;
+  if("params_lt" in where && !(typeof p==="number" && p<where.params_lt)) return false;
+  if("dtype" in where && m.dtype!==where.dtype) return false;
+  if("device" in where && m.device!==where.device) return false;
+  return true; }
+function clearView(){ cy.nodes().forEach(n=> n.removeData("vhi vdim vcolor")); cy.edges().removeData("vdim"); }
+function applyViewSpec(spec){
+  clearView();
+  const ops=(spec&&spec.ops)||[]; const cmap={};
+  ops.forEach(op=>{
+    if(op.op==="highlight"){ cy.nodes().forEach(n=>{ if(_vmatches(n,op.where)) n.data("vhi",true); }); }
+    else if(op.op==="filter"){ cy.nodes().forEach(n=>{ if(!_vmatches(n,op.where)) n.data("vdim",true); }); }
+    else if(op.op==="colorBy"){ cy.nodes().forEach(n=>{ const v=_vfield(n,op.field);
+      if(v==null) return; if(!(v in cmap)) cmap[v]=_VPALETTE[Object.keys(cmap).length%_VPALETTE.length];
+      n.data("vcolor",cmap[v]); }); }
+  });
+}
+const _vin = document.getElementById("view-input");
+if (_vin && vscode){
+  _vin.addEventListener("keydown",(e)=>{ if(e.key==="Enter" && _vin.value.trim()){
+    _vin.classList.add("busy"); vscode.postMessage({type:"view", prompt:_vin.value.trim()}); } });
+}
+const _vclr = document.getElementById("btn-view-clear");
+if (_vclr) _vclr.onclick = ()=>{ clearView(); if(_vin) _vin.value=""; };
+
 const _be = document.getElementById("btn-expand");
 const _bc = document.getElementById("btn-collapse");
 // Expanding a big deep model to its full node count is an unreadable smear even
@@ -345,9 +448,18 @@ sizeFx();
 window.addEventListener("resize", sizeFx);
 
 let _off = 0, _phase = 0;
+let _t = 0;
+const _warnNodes = cy.nodes("[?warn]");
 function frame(){
   _off -= 0.55;                                  // dash march
   cy.edges().style("line-dash-offset", _off);
+  _t += 0.05;
+
+  // pulse the mismatch nodes' glow so a shape clash is impossible to miss.
+  if (_warnNodes.nonempty()){
+    const u = 0.34 + 0.30 * (0.5 + 0.5 * Math.sin(_t * 1.6));   // 0.34..0.64
+    _warnNodes.style({ "underlay-opacity": u, "underlay-padding": 12 + u * 10 });
+  }
 
   _phase = (_phase + 0.006) % 1;                 // comet progress 0..1
   const r = cy.container().getBoundingClientRect();
@@ -363,19 +475,20 @@ function frame(){
     const s = { x: sm.x * z + pan.x, y: sm.y * z + pan.y };
     const t = { x: tm.x * z + pan.x, y: tm.y * z + pan.y };
     const warn = e.data("warn");
-    const col = warn ? "#ff5a5f" : (KIND[e.target().data("kind")] || "#88c0d0");
-    // 2 comets per edge, offset in phase, fading head
+    const col = warn ? "#ff4d52" : (KIND[e.target().data("kind")] || "#88c0d0");
+    // 2 comets per edge, offset in phase, fading head (brighter + larger now)
     for (let k = 0; k < 2; k++){
       const p = (_phase + k * 0.5) % 1;
       const x = s.x + (t.x - s.x) * p;
       const y = s.y + (t.y - s.y) * p;
-      const rad = warn ? 3.2 : 2.4;
-      const g = fxctx.createRadialGradient(x, y, 0, x, y, rad * 3);
+      const rad = warn ? 3.6 : 2.8;
+      const g = fxctx.createRadialGradient(x, y, 0, x, y, rad * 3.4);
       g.addColorStop(0, col);
+      g.addColorStop(0.35, col);
       g.addColorStop(1, "rgba(0,0,0,0)");
       fxctx.fillStyle = g;
       fxctx.beginPath();
-      fxctx.arc(x, y, rad * 3, 0, Math.PI * 2);
+      fxctx.arc(x, y, rad * 3.4, 0, Math.PI * 2);
       fxctx.fill();
     }
   }
@@ -420,8 +533,11 @@ function showPanel(d){
   if (m.in_shape)  row(rows,"in",  "["+m.in_shape.join(", ")+"]");
   if (typeof m.params==="number") row(rows,"params", m.params.toLocaleString());
   if (m.dtype) row(rows,"dtype", m.dtype);
+  if (m.device) row(rows,"device", m.device);
   if (d.prov) row(rows,"source", d.prov);
   const a=d.attrs||{};
+  if (a.inferred && typeof a.confidence==="number")
+    row(rows,"inferred", "LLM guess · "+Math.round(a.confidence*100)+"% conf");
   if (a.repeat) row(rows,"repeat", "x"+a.repeat);
   if (a.branch) row(rows,"role","branch");
   if (a.reduce) row(rows,"role","reduce / vote");
@@ -432,9 +548,54 @@ function showPanel(d){
     loc.onclick=()=>{ if(vscode) vscode.postMessage({type:"reveal", loc:d.loc}); };
     pbody.appendChild(loc);
   }
+  // ---- isolate (extension host only): re-run JUST this module on its real input
+  // and draw the focused sub-trace. Needs a qualname (a module the tracer named).
+  if (vscode && m.qualname){
+    const iso=document.createElement("div"); iso.className="ask";
+    const b=document.createElement("button"); b.className="askbtn";
+    b.textContent="⌖ isolate this block";
+    b.title="Re-run just "+m.qualname+" on its real input";
+    b.onclick=()=>{ vscode.postMessage({type:"isolate", qualname:m.qualname}); };
+    iso.appendChild(b);
+    pbody.appendChild(iso);
+  }
+  // ---- LLM assistant (extension host only; needs to shell out to python) ----
+  if (vscode){
+    const ask=document.createElement("div"); ask.className="ask";
+    const hasWarn = !!d.warn;
+    const opts = [["explain","explain"],["suggest_fix","suggest fix"]];
+    if (hasWarn) opts.unshift(["why_warn","why flagged?"]);
+    opts.forEach(([q,label])=>{
+      const b=document.createElement("button"); b.className="askbtn"; b.textContent=label;
+      b.onclick=()=>{
+        ansBox.textContent="netscope is thinking…"; ansBox.style.display="block";
+        vscode.postMessage({type:"ask", nodeId:d.id, question:q});
+      };
+      ask.appendChild(b);
+    });
+    pbody.appendChild(ask);
+    const ansBox=document.createElement("div"); ansBox.className="answer"; ansBox.style.display="none";
+    ansBox.dataset.node=d.id; pbody.appendChild(ansBox);
+    panel._ansBox=ansBox;  // so the answer postback can find it
+  }
   panel.classList.add("open");
 }
-cy.on("tap","node",(e)=>{ showPanel(e.target.data()); if(vscode&&e.target.data("loc")) vscode.postMessage({type:"reveal", loc:e.target.data("loc")}); });
+// Tapping a node opens the inspector panel ONLY — it does not jump to source.
+// Click the ↳ file:line link in the panel to reveal (so inspecting a node doesn't
+// yank your editor away every time). This was firing reveal twice per click.
+cy.on("tap","node",(e)=>{ showPanel(e.target.data()); });
+// the extension posts {type:"answer", nodeId, text} back after asking the model
+if (vscode){
+  window.addEventListener("message",(ev)=>{
+    const msg=ev.data||{};
+    if(msg.type==="answer" && panel._ansBox && panel._ansBox.dataset.node===msg.nodeId){
+      panel._ansBox.textContent = msg.text || "(no answer — is an LLM key set?)";
+    } else if(msg.type==="applyView"){
+      if(_vin) _vin.classList.remove("busy");
+      applyViewSpec(msg.spec || {ops:[]});
+    }
+  });
+}
 cy.on("tap",(e)=>{ if(e.target===cy) panel.classList.remove("open"); });
 
 // ---- legend (only kinds actually present) ----------------------------------

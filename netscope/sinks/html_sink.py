@@ -74,6 +74,8 @@ def to_cytoscape(g) -> dict:
         }
         if n["id"] in warn_nodes:
             data["warn"] = True
+        if (n.get("attrs") or {}).get("inferred"):
+            data["inferred"] = True       # LLM-inferred -> rendered dashed/dim
         if n.get("parent"):
             data["parent"] = n["parent"]
         nodes.append({"data": data})

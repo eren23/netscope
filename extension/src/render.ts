@@ -10,12 +10,21 @@ function label(n: any): string {
 }
 
 export function toElements(g: NVGraph): { nodes: any[]; edges: any[] } {
+  // nodes/edges touched by a mismatch warning -> data.warn, so the renderer can
+  // paint them red AND the node panel can offer a "why flagged?" assistant action.
+  const warnIds = new Set<string>();
+  for (const w of (g as unknown as { warnings?: { src: string; dst: string }[] }).warnings || []) {
+    warnIds.add(w.src);
+    warnIds.add(w.dst);
+  }
+
   const nodes = g.nodes.map((n) => {
     const data: any = {
       id: n.id, name: n.name, label: label(n), kind: n.kind,
       meta: n.meta || {}, loc: n.loc,
     };
     if (n.parent) data.parent = n.parent;
+    if (warnIds.has(n.id)) data.warn = true;
     return { data };
   });
 

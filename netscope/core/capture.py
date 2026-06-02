@@ -78,7 +78,21 @@ class Capture:
 
 @contextlib.contextmanager
 def graph(name: str = "") -> Iterator[NVGraph]:
-    """Open a capture session. Yields the live NVGraph."""
+    """Open a capture session. Yields the live NVGraph.
+
+    Sessions do not nest: a second `graph()` opened inside an active one would
+    double-install the global torch hooks, so every module would be captured
+    twice into the inner graph. We raise instead of silently corrupting — use one
+    session, or close the outer first. (The internal isolation re-run opens a
+    nested session deliberately; it clears the active capture first, so it is not
+    affected by this guard.)
+    """
+    if ctx.active_capture() is not None:
+        raise RuntimeError(
+            "netscope is already capturing — graph() sessions cannot be nested. "
+            "Close the outer `with netscope.graph(...)` first, or use a single "
+            "session."
+        )
     cap = Capture(name)
     token = ctx.set_capture(cap)
     stack_token = ctx.push_clean_parent_scope()   # fresh stack; restored on exit

@@ -46,9 +46,11 @@ def main() -> None:
         enc(torch.randn(1, 64))               # Encoder node: real out_shape [1, 256]
         head(torch.randn(1, 128))             # ClassifierHead node: real in_shape [1, 128]
 
-    # the connection you *meant* to make: encoder feature -> head input.
-    g.add_edge(_node_id(g, "Encoder"), _node_id(g, "ClassifierHead"),
-               kind="dataflow", source="hint")
+        # the connection you *meant* to make: encoder feature -> head input.
+        # Declared INSIDE the trace so it's part of the captured graph (and so the
+        # NETSCOPE_OUT dump the editor reads includes it -> red squiggle in-editor).
+        g.add_edge(_node_id(g, "Encoder"), _node_id(g, "ClassifierHead"),
+                   kind="dataflow", source="hint")
 
     from netscope.core.checks import detect_mismatches
     warns = detect_mismatches(g)

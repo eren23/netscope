@@ -34,10 +34,15 @@ def merge(runtime: NVGraph, static: NVGraph) -> NVGraph:
 
     matched_static_ids = set()
 
-    # 1) runtime nodes, fused with any static node sharing their loc
+    # 1) runtime nodes, fused with any static node sharing their loc. A static
+    #    node fuses into AT MOST ONE runtime node (first match wins) — two runtime
+    #    nodes can legitimately share a loc (a submodule called twice, a loop
+    #    body), and duplicating the static node's attrs across both is wrong.
     for rt in runtime.nodes():
         key = _loc_key(rt)
         st = static_by_loc.get(key) if key is not None else None
+        if st is not None and st["id"] in matched_static_ids:
+            st = None   # already fused into an earlier runtime node at this loc
         attrs = dict(rt.get("attrs") or {})
         source = rt["source"]
         if st is not None:
@@ -55,14 +60,35 @@ def merge(runtime: NVGraph, static: NVGraph) -> NVGraph:
                        tensor_meta=e.get("tensor_meta"), source=e["source"],
                        condition=e.get("condition"))
 
-    # 3) static-only nodes (structure the runtime never saw)
+    # Does the runtime trace already have branch / reduce stages? (The user's
+    # netscope.branch()/reduce() hint markers — which carry no loc, so they never
+    # loc-match.) If so, the static AST's recovered "branch loop" / "vote" are
+    # redundant DUPLICATES of them, and keeping them floats disconnected strays
+    # in the fused view (the sfumato 'branch loop' + second 'vote' bug).
+    runtime_has_branch = any(
+        (n.get("attrs") or {}).get("branch") for n in runtime.nodes())
+    runtime_has_reduce = any(
+        (n.get("attrs") or {}).get("reduce") for n in runtime.nodes())
+
+    # 3) static-only nodes (structure the runtime never saw — e.g. a branch fan
+    #    or a vote stage when there were NO runtime hints). Drop the ones that are
+    #    redundant with what the runtime already captured:
+    #    - declared-dim nodes (the static pre-check; redundant with runtime modules)
+    #    - branch/reduce stages already present as runtime branch/reduce markers
     for st in static.nodes():
         if st["id"] in matched_static_ids:
+            continue
+        attrs = st.get("attrs") or {}
+        if attrs.get("declared_dim"):
+            continue
+        if attrs.get("branch") and runtime_has_branch:
+            continue
+        if attrs.get("reduce") and runtime_has_reduce:
             continue
         fused.add_node(
             st["id"], kind=st["kind"], name=st["name"], parent=st.get("parent"),
             source="static", loc=st.get("loc"), meta=st.get("meta"),
-            attrs=st.get("attrs"),
+            attrs=attrs,
         )
 
     return fused
