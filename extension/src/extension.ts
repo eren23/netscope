@@ -249,6 +249,32 @@ async function runLLM(
   }
 }
 
+// Generated views: turn a prompt into a declarative view spec (highlight/filter/
+// colorBy) the webview applies. Shells out to the views CLI with the LLM env;
+// returns the validated spec, or null (the webview just clears) on no key/failure.
+async function runViewSpec(
+  ctx: vscode.ExtensionContext, graph: NVGraph, prompt: string
+): Promise<{ ops: unknown[] } | null> {
+  const env = await llmEnv(ctx);
+  if (!env) {
+    const pick = await vscode.window.showWarningMessage(
+      "netscope: views need an LLM key. Add one to generate views.", "Set API Key");
+    if (pick === "Set API Key") await vscode.commands.executeCommand("netscope.setLlmKey");
+    return null;
+  }
+  const gpath = path.join(os.tmpdir(), `netscope-view-${process.pid}-${Date.now()}.json`);
+  try {
+    fs.writeFileSync(gpath, JSON.stringify(graph));
+    const r = await execAsync(["-m", "netscope.llm.views", gpath, prompt], {
+      title: `netscope: generating view…`, env,
+    });
+    if (r.code !== 0) { vscode.window.showWarningMessage(explainFailure(r)); return null; }
+    try { return JSON.parse(r.stdout); } catch { return null; }
+  } finally {
+    try { fs.unlinkSync(gpath); } catch { /* ignore */ }
+  }
+}
+
 function nonce(): string {
   let s = "";
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -326,6 +352,10 @@ function show(ctx: vscode.ExtensionContext, graph: NVGraph, title: string): void
         const question = msg.question || "explain";
         runLLM(ctx, currentGraph, msg.nodeId, question).then((answer) => {
           panel?.webview.postMessage({ type: "answer", nodeId: msg.nodeId, text: answer || "" });
+        });
+      } else if (msg?.type === "view" && msg.prompt && currentGraph) {
+        runViewSpec(ctx, currentGraph, msg.prompt).then((spec) => {
+          panel?.webview.postMessage({ type: "applyView", spec: spec || { ops: [] } });
         });
       }
     });

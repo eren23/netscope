@@ -117,6 +117,11 @@
     color:var(--ink-dim); background:rgba(255,255,255,0.03); border:1px solid var(--hair);
     border-radius:7px; padding:5px 10px; cursor:pointer; transition:all .14s; }
   .hbtn:hover { color:var(--stage); border-color:var(--stage); background:rgba(34,211,238,0.08); }
+  .vinput { font-family:var(--mono); font-size:10px; color:var(--ink); background:rgba(255,255,255,0.04);
+    border:1px solid var(--hair); border-radius:7px; padding:5px 9px; width:200px; outline:none;
+    transition:all .14s; }
+  .vinput::placeholder { color:var(--ink-dim); text-transform:none; letter-spacing:0; }
+  .vinput:focus { border-color:var(--stage); background:rgba(34,211,238,0.06); width:240px; }
   #hud .live { margin-left:0; }
 </style>
 </head>
@@ -131,6 +136,8 @@
   <span class="hbtns">
     <button class="hbtn" id="btn-expand">⊕ expand all</button>
     <button class="hbtn" id="btn-collapse">⊖ collapse all</button>
+    <input class="vinput" id="view-input" type="text" placeholder="view: e.g. highlight attention" />
+    <button class="hbtn" id="btn-view-clear" title="clear view">✕</button>
   </span>
   <span class="warnpill" id="warnpill" title="shape mismatches">⚠ <span id="warncount">0</span></span>
   <span class="live"><span class="dot"></span> tracing</span>
@@ -211,6 +218,18 @@ const cy = cytoscape({
         "color": "#aec3d4", "text-background-color": "#06080c",
         "text-background-opacity": 0.88, "text-background-padding": 3,
         "text-background-shape": "round-rectangle" } },
+
+    // --- generated views: a prompt -> a declarative spec stamps these flags.
+    // vdim = filtered out (dimmed), vhi = highlighted, vcolor = recolored.
+    { selector: "node[?vdim]", style: { "opacity": 0.16 } },
+    { selector: "edge[?vdim]", style: { "opacity": 0.06 } },
+    { selector: "node[vcolor]", style: {
+        "border-color": "data(vcolor)", "border-width": 2.2, "border-opacity": 1,
+        "underlay-color": "data(vcolor)", "underlay-opacity": 0.28 } },
+    { selector: "node[?vhi]", style: {
+        "border-color": "#ffffff", "border-width": 2.6, "border-opacity": 1,
+        "underlay-color": "#2ee6ff", "underlay-opacity": 0.55, "underlay-padding": 13,
+        "z-index": 80 } },
 
     // --- LLM-inferred (provisional) nodes/edges: dashed + dimmer, so a GUESS
     // never looks like a captured fact. Confidence rides in the detail panel.
@@ -347,6 +366,44 @@ runLayout();
 // readable overview instead of dumping you zoomed-in to the middle of a giant
 // canvas (the "wall of orange" symptom). cy.fit is inside runLayout already.
 function relayout(){ try { runLayout(); } catch(_){ cy.fit(undefined, 52); } }
+
+// ---- generated views: apply a declarative spec (mirrors netscope/llm/views.py)
+// A prompt -> the extension fetches a validated spec -> we stamp vhi/vdim/vcolor
+// onto the live nodes here. Safe: a fixed set of ops, no eval.
+const _VPALETTE = ["#2ee6ff","#34f5a8","#ffc233","#cf8bff","#ff8d6b","#6ad1ff","#8affc2","#ffd98a","#e0a3ff","#ff5a5f"];
+function _vfield(n, f){ if(f==="kind")return n.data("kind"); if(f==="name")return n.data("name");
+  const m=n.data("meta")||{}; return m[f]; }
+function _vmatches(n, where){ where=where||{}; const m=n.data("meta")||{};
+  const keys=["kind","name_contains","params_gt","params_lt","dtype","device"];
+  if(!keys.some(k=> k in where)) return false;
+  if("kind" in where && n.data("kind")!==where.kind) return false;
+  if("name_contains" in where && !String(n.data("name")||"").toLowerCase().includes(String(where.name_contains).toLowerCase())) return false;
+  const p=m.params;
+  if("params_gt" in where && !(typeof p==="number" && p>where.params_gt)) return false;
+  if("params_lt" in where && !(typeof p==="number" && p<where.params_lt)) return false;
+  if("dtype" in where && m.dtype!==where.dtype) return false;
+  if("device" in where && m.device!==where.device) return false;
+  return true; }
+function clearView(){ cy.nodes().forEach(n=> n.removeData("vhi vdim vcolor")); cy.edges().removeData("vdim"); }
+function applyViewSpec(spec){
+  clearView();
+  const ops=(spec&&spec.ops)||[]; const cmap={};
+  ops.forEach(op=>{
+    if(op.op==="highlight"){ cy.nodes().forEach(n=>{ if(_vmatches(n,op.where)) n.data("vhi",true); }); }
+    else if(op.op==="filter"){ cy.nodes().forEach(n=>{ if(!_vmatches(n,op.where)) n.data("vdim",true); }); }
+    else if(op.op==="colorBy"){ cy.nodes().forEach(n=>{ const v=_vfield(n,op.field);
+      if(v==null) return; if(!(v in cmap)) cmap[v]=_VPALETTE[Object.keys(cmap).length%_VPALETTE.length];
+      n.data("vcolor",cmap[v]); }); }
+  });
+}
+const _vin = document.getElementById("view-input");
+if (_vin && vscode){
+  _vin.addEventListener("keydown",(e)=>{ if(e.key==="Enter" && _vin.value.trim()){
+    _vin.classList.add("busy"); vscode.postMessage({type:"view", prompt:_vin.value.trim()}); } });
+}
+const _vclr = document.getElementById("btn-view-clear");
+if (_vclr) _vclr.onclick = ()=>{ clearView(); if(_vin) _vin.value=""; };
+
 const _be = document.getElementById("btn-expand");
 const _bc = document.getElementById("btn-collapse");
 // Expanding a big deep model to its full node count is an unreadable smear even
@@ -533,6 +590,9 @@ if (vscode){
     const msg=ev.data||{};
     if(msg.type==="answer" && panel._ansBox && panel._ansBox.dataset.node===msg.nodeId){
       panel._ansBox.textContent = msg.text || "(no answer — is an LLM key set?)";
+    } else if(msg.type==="applyView"){
+      if(_vin) _vin.classList.remove("busy");
+      applyViewSpec(msg.spec || {ops:[]});
     }
   });
 }
