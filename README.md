@@ -46,7 +46,8 @@ is kept, never tensors.
 
 ## What you get
 
-- **Real tensor shapes** on every node and dataflow edge, captured from the run.
+- **Real tensor shapes, dtype + device** on every node and dataflow edge,
+  captured from the run (dict/`ModelOutput`-returning HF modules included).
 - **Hierarchy** — `pipeline → stage → model → module` as nested boxes.
 - **Dataflow edges** — within-model via tensor identity, cross-stage via light
   `nv.stage` / `nv.branch` / `nv.reduce` hints. Animated comet particles show
@@ -54,11 +55,23 @@ is kept, never tensors.
 - **Collapse/expand** — repeated blocks (a model's N decoder layers) fold into a
   single `[+]` node, so a deep model reads as a clean left-to-right pipeline.
 - **Shape-mismatch warnings** — a dataflow edge whose producer/consumer shapes
-  don't line up is painted red with a ⚠ list (feature-dim clashes *and*
-  rank/"forgot to flatten()" bugs).
+  don't line up is painted red (pulsing) with a ⚠ list — feature-dim clashes
+  *and* rank/"forgot to flatten()" bugs.
 - **Static analysis** — `python -m netscope.static yourfile.py` recovers the
-  branch/vote structure from source **without running it**.
+  branch/vote structure **and** declared-dim wiring clashes from source *without
+  running it* (a `torch.fx` fallback recovers real structure for traceable models).
+- **Isolate a part** — re-run just one submodule on its real input, alone.
 - **Click-to-source** — every node carries `file:line`.
+
+…and three optional, key-gated layers on top (all work offline without them):
+
+- **In-editor live experience** — inline shape hints + mismatch squiggles on the
+  line as you write; the static skeleton + clashes refresh live on save.
+- **LLM assistant** — explain a node / why it's flagged / suggest a fix, plus
+  **augmented inference** (fill structure the AST can't see, drawn as provisional
+  dashed nodes) and **generated views** (a prompt → a safe re-styling of the graph).
+- **MCP server** — expose the live graph + real shapes to coding agents
+  (Cursor / Claude Code) so they query reality instead of guessing.
 
 ## Gallery
 
@@ -74,11 +87,15 @@ A **shape mismatch** caught while wiring an encoder into a head:
 Run them yourself:
 
 ```bash
-python examples/sfumato_cmajc.py     # AR-plan -> diffuse x5 -> vote (CPU, mocked)
-python examples/resnet_demo.py       # resnet18, 11.7M params, layers folded
-python examples/transformer_demo.py  # a TransformerEncoderLayer
-python examples/real_model_demo.py   # real Qwen3 arch, no weights (LAYERS=28 for all)
-python examples/mismatch_demo.py     # Encoder(256) -> head(128): flagged red
+python examples/sfumato_cmajc.py        # AR-plan -> diffuse x5 -> vote (CPU, mocked)
+python examples/resnet_demo.py          # resnet18, 11.7M params, layers folded
+python examples/transformer_demo.py     # a TransformerEncoderLayer
+python examples/real_model_demo.py      # real Qwen3 arch, no weights (LAYERS=28 for all)
+python examples/mismatch_demo.py        # Encoder(256) -> head(128): flagged red
+python examples/static_dim_check_demo.py # a wiring clash caught WITHOUT running
+python examples/isolate_demo.py         # re-run just resnet's layer2, alone
+python examples/mcp_server_demo.py      # the MCP tools an agent would call
+python examples/views_demo.py           # a prompt -> a graph re-styling spec
 ```
 
 ## Optional hints
@@ -99,17 +116,26 @@ with netscope.reduce("vote"):    winner = majority(cands)
 
 `extension/` is a TypeScript extension that renders the graph in the editor:
 **Show Graph** (static skeleton, no run) and **Run & Trace** (real graph, fused
-by source location), with click-a-node → jump-to-line. After a trace you also get
-**inline shape hints** (each layer's real tensor shape as ghost text on its line),
-**mismatch squiggles** (shape clashes underlined in red — even from the static
-pass, before you run), and an **LLM assistant** on the node panel
-(`explain` / `why flagged` / `suggest fix`, grounded in the real trace).
+by source location), with click-a-node → jump-to-line. After a trace you also get:
+
+- **inline shape hints** — each layer's real tensor shape as ghost text on its line;
+- **mismatch squiggles** — shape clashes underlined in red, *live on save* from the
+  static pass (no run needed) and from the real trace;
+- a node panel with **isolate this block**, the **LLM assistant**
+  (`explain` / `why flagged` / `suggest fix`), and a **view:** box that turns a
+  prompt into a graph re-styling;
+- non-blocking, cancellable runs (a big model won't freeze the editor).
 
 ```bash
 cd extension && npm install && npm run compile
-# then press F5 in the extension/ folder ("Run netscope Extension"),
-# set netscope.pythonPath to your venv, open a file, click the CodeLens.
+# then: Run ▸ Start Debugging ("Run netscope Extension"). A second window opens
+# with the extension live. Set netscope.pythonPath to your venv, open a .py file,
+# and click the CodeLens (or ⌘⌥T). Run `netscope: Check Setup` if anything's off.
 ```
+
+> On macOS, **F5** is often a system key — use **Run ▸ Start Debugging** (or the
+> Run-and-Debug sidebar) instead. Or install the packaged `.vsix`:
+> `cursor --install-extension netscope-*.vsix`.
 
 Keyboard: **⌘⌥T** / **Ctrl+Alt+T** = Run & Trace, **⌘⌥G** / **Ctrl+Alt+G** = Show Graph.
 
@@ -187,7 +213,7 @@ and inside locked-down webviews.
 ```bash
 python3 -m venv .venv --system-site-packages
 .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest tests/          # 72 passed, 1 skipped (FLOPs: thop optional)
+.venv/bin/python -m pytest tests/          # 154 passed, 1 skipped (FLOPs: thop optional)
 cd extension && npm run test:unit && npm run test:headless
 ```
 
