@@ -1,4 +1,4 @@
-# Release checklist — netscope 0.1.0
+# Release checklist — netscope 0.1.3
 
 Two artifacts ship together. The extension needs the engine installed in the
 user's venv (it shells out, has no torch itself), so **publish PyPI first**.
@@ -8,60 +8,72 @@ gate list.
 
 ## Pre-flight (done locally, verified)
 
-- [x] Version bumped to `0.1.0` in `pyproject.toml` and `extension/package.json`.
-- [x] `python -m build` → `dist/netscope-0.1.0-py3-none-any.whl` + `.tar.gz`.
+- [x] Version `0.1.3` in `pyproject.toml` and `extension/package.json` (in sync).
+- [x] `python -m build` → `dist/netscope-0.1.3-py3-none-any.whl` + `.tar.gz`.
 - [x] `twine check dist/*` → PASSED (both).
-- [x] Web assets + isolation + session-fix code confirmed *inside* the wheel.
-- [x] Fresh-venv install proof: `pip install` the wheel → `import netscope` →
-      `g.show()` emits a self-contained HTML; isolation works on resnet18.
-- [x] `vsce package` → `extension/netscope-0.1.0.vsix` (15 files, out/+media/
-      only, no `.ts`/`src` leak).
-- [x] Tests: 76 passed / 1 skipped (JUnit-confirmed); tsc clean; headless 5/5.
+- [x] All new code confirmed *inside* the wheel: mcp server, llm infer/views,
+      fx fallback, static dims, web assets (`Version: 0.1.3`).
+- [x] Fresh-venv install proof: `pip install` the wheel in a clean venv →
+      every subpackage imports → MCP exposes 4 tools → `g.show()` emits a
+      **self-contained 728 KB HTML with 0 external scripts**.
+- [x] `vsce package` → `extension/netscope-0.1.3.vsix` (18 files, `out/`+`media/`
+      only — manifest `0.1.3`, async/views/decorations code present, no `.ts`/`src` leak).
+- [x] Tests: **154 passed / 1 skipped** (JUnit-confirmed; the skip is THOP FLOPs,
+      an optional extra); `tsc` clean; headless **12/12**.
+
+## ⚠ Blocker before `vsce publish` — set a real publisher ID
+
+`extension/package.json` `"publisher"` is the **placeholder `"netscope"`**, which
+is *not* a registered Marketplace publisher. `vsce publish` will fail until you:
+
+1. Create a publisher at https://marketplace.visualstudio.com/manage (Microsoft
+   account) and copy its exact ID (e.g. `eren23`).
+2. Set that ID in `extension/package.json` → `"publisher"`.
+3. **Re-run `vsce package`** so the `.vsix` carries the real publisher.
+
+The PyPI wheel has no such blocker — it's ready to upload as-is.
 
 ## Accounts / tokens needed (you, one-time)
 
 - [ ] **PyPI** account + API token (`__token__` / `pypi-…`).
-- [ ] **VS Code Marketplace** publisher ID — set it in `extension/package.json`
-      `"publisher"` (currently the placeholder `"netscope"`) — plus an Azure PAT
+- [ ] **VS Code Marketplace** publisher ID (see blocker above) + an Azure PAT
       (scope: Marketplace → Manage).
 - [ ] **Open VSX** account + token (so Cursor / VSCodium users can install).
-- [ ] **GitHub** repo created (see "Publish the repo" below).
 
-## Publish the repo
-
-This working tree is clean (87 tracked files, no build junk, no `.claude/`).
+## Publish the engine (PyPI) — do this first
 
 ```bash
-# create the repo on GitHub (empty), then from the project dir:
-git remote add origin https://github.com/<you>/netscope.git
-git push -u origin main
+cd /Users/eren/Documents/AI/network_visualizer_ext
+# (optional) TestPyPI dry-run first:
+python -m twine upload --repository testpypi dist/*
+#   then in a clean venv: pip install -i https://test.pypi.org/simple/ \
+#   --extra-index-url https://pypi.org/simple netscope && python -c "import netscope"
+
+python -m twine upload dist/netscope-0.1.3*       # __token__ / pypi-<token>
 ```
-
-> The current local history includes the build/iteration churn. If you want a
-> single clean initial commit instead, see "Squashing history" in PUBLISHING.md
-> (the `git reset` is blocked by a local safety hook, so run it yourself).
-
-## Publish the engine (PyPI)
-
-- [ ] (recommended) TestPyPI dry-run: `twine upload --repository testpypi dist/*`
-      → install from TestPyPI in a clean venv → `import netscope`.
-- [ ] `twine upload dist/*`
 - [ ] Verify: `pip install netscope` in a clean venv works.
 
-## Publish the extension
+## Publish the extension (after the publisher fix)
 
-- [ ] Set the real publisher ID, rerun `vsce package`.
-- [ ] `vsce publish` (Marketplace).
-- [ ] `ovsx publish netscope-0.1.0.vsix -p <token>` (Open VSX, for Cursor).
-- [ ] Sideload-test the `.vsix` once: `cursor --install-extension netscope-0.1.0.vsix`.
+```bash
+cd /Users/eren/Documents/AI/network_visualizer_ext/extension
+# 1. set the real publisher ID in package.json, then:
+npx @vscode/vsce package                          # rebuild netscope-0.1.3.vsix
+npx @vscode/vsce login <publisher-id>             # paste the PAT
+npx @vscode/vsce publish                          # Marketplace
+npx ovsx publish netscope-0.1.3.vsix -p <token>   # Open VSX (Cursor)
+```
+- [ ] Sideload-test once: `cursor --install-extension netscope-0.1.3.vsix`.
 
 ## Tag the release
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.1.3 && git push origin v0.1.3
 ```
 
-## After 0.1.0
+## After 0.1.3
 
-See [ROADMAP.md](ROADMAP.md) — next up is the "as you write" live engine +
-the LLM-augmented layer (built together).
+See [ROADMAP.md](ROADMAP.md). The "as you write" live engine, the LLM-augmented
+layer (assistant + inference + views), and the MCP server all landed in 0.1.x;
+next is deepening real-model coverage (fx on dynamic-control-flow models) and the
+generated-views surface.
