@@ -156,8 +156,6 @@ PAGE = r'''<!doctype html><html><head><meta charset="utf-8"><title>netscope · p
   select.mode{font-family:var(--mono);font-size:11px;color:var(--ink);background:rgba(255,255,255,.04);
     border:1px solid var(--hair);border-radius:7px;padding:5px 8px;outline:none;cursor:pointer}
   select.mode:hover{border-color:var(--stage,var(--cyan))}
-  .chip{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px;letter-spacing:.05em}
-  .dot{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 9px var(--teal)}
   #wrap{position:relative;flex:1;display:flex;overflow:hidden}
   #gutter{padding:16px 8px 16px 15px;text-align:right;color:#323d57;font-size:13px;
     line-height:22px;user-select:none;white-space:pre}
@@ -174,9 +172,10 @@ PAGE = r'''<!doctype html><html><head><meta charset="utf-8"><title>netscope · p
   #status{position:absolute;top:13px;right:17px;font-size:11px;color:var(--dim);
     background:rgba(8,11,18,.72);padding:5px 11px;border-radius:7px;border:1px solid var(--hair);
     letter-spacing:.04em}
-  #caption{position:absolute;left:0;right:0;bottom:0;padding:18px 22px 20px;
-    background:linear-gradient(transparent,rgba(4,6,11,.9));font-size:15px;color:#eaf2ff;
-    letter-spacing:.01em;opacity:0;transition:opacity .4s;line-height:1.4}
+  #caption{position:absolute;left:18px;right:18px;bottom:70px;padding:13px 18px;
+    background:rgba(6,9,15,.86);border:1px solid var(--hair);border-radius:11px;
+    box-shadow:0 12px 32px rgba(0,0,0,.5);font-size:15px;color:#eaf2ff;
+    letter-spacing:.01em;opacity:0;transition:opacity .35s;line-height:1.4}
   #caption.show{opacity:1}#caption b{color:var(--cyan);font-weight:600}
 </style></head>
 <body><div id="app">
@@ -189,7 +188,7 @@ PAGE = r'''<!doctype html><html><head><meta charset="utf-8"><title>netscope · p
         <option value="profile">mode: profile</option>
         <option value="diff">mode: diff vs last</option>
       </select>
-      <span class="chip"><span class="dot"></span> LIVE</span></div>
+    </div>
     <div id="wrap"><div id="gutter">1</div><div id="stack">
       <pre id="hl"></pre><textarea id="code" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
     </div></div>

@@ -24,7 +24,7 @@ red** before they blow up at runtime. No decorators, ~zero overhead, no CDN.
 Recorded live in the editor — every keystroke re-analyzed, the graph updated as
 you work. **Try it yourself:** `python -m netscope.playground` opens this split
 view in your browser (paste a model, watch it analyzed — trace / static / profile
-/ diff modes). Or watch the **▶ [40-second full tour](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/netscope-reel.mp4)**.
+/ diff modes). Or watch the **▶ [~50-second full tour](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/netscope-reel.mp4)**.
 
 |  |  |
 |:--|:--|
