@@ -215,7 +215,9 @@ async function sceneRtdetr(p) {
   await sleep(700);
   await type_(p, RTDETR, 18);
   await sleep(7000);   // big model: one CPU forward + render
-  await cap_(p, 'Backbone → multi-scale encoder → decoder — 639 layers, folded into a pipeline.');
+  const fr = await graphFrame(p);
+  if (fr) { await fr.evaluate(() => { const b = document.getElementById('btn-collapse'); if (b) b.click(); }); await sleep(1000); }
+  await cap_(p, 'Backbone → multi-scale encoder → decoder — 639 layers, folded to a pipeline.');
   await sleep(3200);
 }
 
@@ -227,8 +229,10 @@ async function sceneYolo(p) {
   await sleep(700);
   await type_(p, YOLO, 18);
   await sleep(7000);
-  await cap_(p, 'The CSP backbone, the neck, and the detection heads — folded clean.');
-  await sleep(3200);
+  const fy = await graphFrame(p);
+  if (fy) { await fy.evaluate(() => { const b = document.getElementById('btn-collapse'); if (b) b.click(); }); await sleep(1000); }
+  await cap_(p, 'The CSP backbone, the neck, and the detection heads — folded to a clean pipeline.');
+  await sleep(3000);
 }
 
 const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile, roles: sceneRoles, playground: scenePlayground, resnet: sceneResnet, gpt2: sceneGpt2, mobilenet: sceneMobilenet, rtdetr: sceneRtdetr, yolo: sceneYolo };

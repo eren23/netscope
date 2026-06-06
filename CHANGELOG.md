@@ -53,6 +53,12 @@ _Nothing yet._
 - **MCP `trace_file`** surfaces the script's real exit code + stderr (not a generic
   "no graph"), validates `mode`, and uses `mkstemp`. Plus smaller nits: mermaid id
   collisions, timeline sort on mixed types, an accurate threading note, dead code.
+- **Detection/segmentation stack** (dogfooded on YOLOv8, RT-DETR, SAM, torchvision
+  detectors): the mismatch checker now compares each edge against the tensor that
+  actually flowed (multi-scale backbones like RT-DETR) and skips fan-in/merge
+  consumers (concat necks in YOLO/FPN/U-Net) — eliminating ~all false alarms on
+  these (RT-DETR 4→0, YOLOv8 6→0). The comet fx guards non-finite layout coords so
+  a large non-linear graph can't crash the render.
 
 ### Security
 - **Playground origin guard** — `python -m netscope.playground` runs the editor's

@@ -535,6 +535,9 @@ function frame(){
     if (!sm || !tm) continue;
     const s = { x: sm.x * z + pan.x, y: sm.y * z + pan.y };
     const t = { x: tm.x * z + pan.x, y: tm.y * z + pan.y };
+    // a degenerate layout position (NaN/Inf) on a big non-linear graph would make
+    // createRadialGradient throw and kill the whole fx loop — skip such edges.
+    if (!isFinite(s.x) || !isFinite(s.y) || !isFinite(t.x) || !isFinite(t.y)) continue;
     const warn = e.data("warn");
     const col = warn ? "#ff4d52" : (KIND[e.target().data("kind")] || "#88c0d0");
     // 2 comets per edge, offset in phase, fading head (brighter + larger now)
