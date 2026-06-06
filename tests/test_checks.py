@@ -154,6 +154,19 @@ def test_edge_shape_still_catches_a_real_clash():
     assert len(w) == 1 and "256" in w[0]["detail"] and "128" in w[0]["detail"]
 
 
+def test_concat_fanin_consumer_is_not_false_flagged():
+    # a consumer fed by TWO producers (a concat in an FPN/PAN neck — YOLO, U-Net):
+    # its in_shape is the COMBINED channels (64+64=128); each producer's edge is a
+    # part, so a per-edge feature check is invalid and must be skipped.
+    g = NVGraph("m")
+    g.add_node("p1", kind="module", name="P1", meta={"out_shape": [1, 64, 80, 80]})
+    g.add_node("p2", kind="module", name="P2", meta={"out_shape": [1, 64, 80, 80]})
+    g.add_node("c", kind="module", name="C2f", meta={"in_shape": [1, 128, 80, 80]})
+    g.add_edge("p1", "c", kind="dataflow", tensor_meta={"shape": [1, 64, 80, 80]})
+    g.add_edge("p2", "c", kind="dataflow", tensor_meta={"shape": [1, 64, 80, 80]})
+    assert detect_mismatches(g) == []   # fan-in merge — per-edge check skipped
+
+
 def test_capture_attaches_warnings_to_graph_dict():
     import netscope
 

@@ -97,9 +97,19 @@ def _check_edge(a, b, src, dst, edge_shape=None) -> Optional[dict]:
 def detect_mismatches(graph) -> list:
     warnings = []
     nodes = {n["id"]: n for n in graph.nodes()}
+    # dataflow in-degree per consumer: a node fed by >1 producer merges them
+    # (concat in an FPN/PAN/U-Net neck, a residual add). Its in_shape is the
+    # COMBINED tensor, so comparing it against any single producer's edge is a false
+    # alarm — only a clean 1->1 wiring can be soundly checked.
+    indeg: dict = {}
+    for e in graph.edges():
+        if e["kind"] == "dataflow":
+            indeg[e["dst"]] = indeg.get(e["dst"], 0) + 1
     for e in graph.edges():
         if e["kind"] != "dataflow":
             continue
+        if indeg.get(e["dst"], 0) > 1:
+            continue   # consumer merges several inputs — per-edge check is invalid
         a = nodes.get(e["src"])
         b = nodes.get(e["dst"])
         if not a or not b:

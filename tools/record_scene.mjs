@@ -204,7 +204,34 @@ async function sceneMobilenet(p) {
   await sleep(2800);
 }
 
-const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile, roles: sceneRoles, playground: scenePlayground, resnet: sceneResnet, gpt2: sceneGpt2, mobilenet: sceneMobilenet };
+const RTDETR = `import torch\nfrom transformers import RTDetrConfig, RTDetrModel\n\nmodel = RTDetrModel(RTDetrConfig(num_queries=20))\nx = torch.randn(1, 3, 224, 224)\n`;
+const YOLO = `import torch\nfrom ultralytics import YOLO\n\nmodel = YOLO("yolov8n.yaml").model\nx = torch.randn(1, 3, 640, 640)\n`;
+
+async function sceneRtdetr(p) {
+  await mode_(p, 'trace');
+  await p.evaluate(() => window.nsSet(''));
+  await sleep(250);
+  await cap_(p, '<b>RT-DETR</b> — a real-time DETR detector (backbone + transformer), from config.');
+  await sleep(700);
+  await type_(p, RTDETR, 18);
+  await sleep(7000);   // big model: one CPU forward + render
+  await cap_(p, 'Backbone → multi-scale encoder → decoder — 639 layers, folded into a pipeline.');
+  await sleep(3200);
+}
+
+async function sceneYolo(p) {
+  await mode_(p, 'trace');
+  await p.evaluate(() => window.nsSet(''));
+  await sleep(250);
+  await cap_(p, '<b>YOLOv8</b> — built from its yaml (no weights), traced from one forward.');
+  await sleep(700);
+  await type_(p, YOLO, 18);
+  await sleep(7000);
+  await cap_(p, 'The CSP backbone, the neck, and the detection heads — folded clean.');
+  await sleep(3200);
+}
+
+const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile, roles: sceneRoles, playground: scenePlayground, resnet: sceneResnet, gpt2: sceneGpt2, mobilenet: sceneMobilenet, rtdetr: sceneRtdetr, yolo: sceneYolo };
 
 (async () => {
   const run = SCENES[scene];
