@@ -33,11 +33,18 @@ view in your browser (paste a model, watch it analyzed — trace / static / prof
 | **Profile by cost** — the fat layer glows red | **Color by role** — attention / MLP / norm |
 | ![profile cost heatmap](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/profile.gif) | ![color a transformer by role](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/roles.gif) |
 
-**On real models** — paste it, get the graph:
+**On real models** — paste it, get the graph (big models auto-fold to a readable
+top-level pipeline you can drill into):
 
-| resnet18 (folded) | GPT-2 from config (role-colored) | MobileNetV3 (folded) |
+| resnet18 | GPT-2 from config (role-colored) | MobileNetV3 |
 |:--:|:--:|:--:|
 | ![resnet18 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/resnet.gif) | ![GPT-2 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/gpt2.gif) | ![MobileNetV3 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/mobilenet.gif) |
+
+…and **detection / DETR** — YOLOv8 (272 layers) and RT-DETR (639), folded to a pipeline:
+
+| YOLOv8 | RT-DETR |
+|:--:|:--:|
+| ![YOLOv8 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/yolo.gif) | ![RT-DETR traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/rtdetr.gif) |
 
 ## Why
 

@@ -32,6 +32,9 @@ _Nothing yet._
   `py.typed` marker so downstream type-checkers see the hints.
 - **CI** — GitHub Actions: pytest (3.9–3.12, CPU torch), the extension
   (tsc/unit/headless), and build + twine check on push/PR.
+- **Big-model rendering** — the graph auto-folds a large model (YOLO 272, RT-DETR
+  639, …) to a readable top-level pipeline by default (each block expandable), and
+  uses the layered L→R layout for folded detectors — no more unreadable blob.
 
 ### Fixed
 - **Mismatch checker** is rank-aware: encoder→decoder sequence-length differences

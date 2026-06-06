@@ -214,9 +214,7 @@ async function sceneRtdetr(p) {
   await cap_(p, '<b>RT-DETR</b> — a real-time DETR detector (backbone + transformer), from config.');
   await sleep(700);
   await type_(p, RTDETR, 18);
-  await sleep(7000);   // big model: one CPU forward + render
-  const fr = await graphFrame(p);
-  if (fr) { await fr.evaluate(() => { const b = document.getElementById('btn-collapse'); if (b) b.click(); }); await sleep(1000); }
+  await sleep(7000);   // forward + render — auto-folds to the top-level DAG
   await cap_(p, 'Backbone → multi-scale encoder → decoder — 639 layers, folded to a pipeline.');
   await sleep(3200);
 }
@@ -228,10 +226,8 @@ async function sceneYolo(p) {
   await cap_(p, '<b>YOLOv8</b> — built from its yaml (no weights), traced from one forward.');
   await sleep(700);
   await type_(p, YOLO, 18);
-  await sleep(7000);
-  const fy = await graphFrame(p);
-  if (fy) { await fy.evaluate(() => { const b = document.getElementById('btn-collapse'); if (b) b.click(); }); await sleep(1000); }
-  await cap_(p, 'The CSP backbone, the neck, and the detection heads — folded to a clean pipeline.');
+  await sleep(7000);   // forward + render — auto-folds to the top-level pipeline
+  await cap_(p, 'CSP backbone → neck → detection heads — 272 layers, folded to a pipeline.');
   await sleep(3000);
 }
 
