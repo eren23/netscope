@@ -1,4 +1,4 @@
-# Release checklist — netscope 0.1.3
+# Release checklist — netscope 0.1.4
 
 Two artifacts ship together. The extension needs the engine installed in the
 user's venv (it shells out, has no torch itself), so **publish PyPI first**.
@@ -8,18 +8,20 @@ gate list.
 
 ## Pre-flight (done locally, verified)
 
-- [x] Version `0.1.3` in `pyproject.toml` and `extension/package.json` (in sync).
-- [x] `python -m build` → `dist/netscope-0.1.3-py3-none-any.whl` + `.tar.gz`.
+- [x] Version `0.1.4` in `pyproject.toml` and `extension/package.json` (in sync).
+- [x] `python -m build` → `dist/netscope-0.1.4-py3-none-any.whl` + `.tar.gz`.
 - [x] `twine check dist/*` → PASSED (both).
-- [x] All new code confirmed *inside* the wheel: mcp server, llm infer/views,
-      fx fallback, static dims, web assets (`Version: 0.1.3`).
+- [x] New 0.1.4 code confirmed *inside* the wheel: `core/diff.py`, `enrich/roles.py`,
+      `core/timeline.py`, `playground.py`, refreshed web assets (manifest `0.1.4`).
 - [x] Fresh-venv install proof: `pip install` the wheel in a clean venv →
-      every subpackage imports → MCP exposes 4 tools → `g.show()` emits a
-      **self-contained 728 KB HTML with 0 external scripts**.
-- [x] `vsce package` → `extension/netscope-0.1.3.vsix` (18 files, `out/`+`media/`
-      only — manifest `0.1.3`, async/views/decorations code present, no `.ts`/`src` leak).
-- [x] Tests: **154 passed / 1 skipped** (JUnit-confirmed; the skip is THOP FLOPs,
-      an optional extra); `tsc` clean; headless **12/12**.
+      `diff` / `diff_view` / `roles` / `timeline` / `step` all importable → a
+      profiled trace returns roles + a timeline → `g.show()` emits a
+      **self-contained ~720 KB HTML with 0 external scripts**.
+- [x] `vsce package` → `extension/netscope-0.1.4.vsix` (18 files, `out/`+`media/`
+      only — manifest `0.1.4`, the `Diff with Last Trace` + `Run & Trace (Profiled)`
+      commands and the role/cost overlays present, no `.ts`/`src` leak).
+- [x] Tests: **188 passed / 1 skipped** (the skip is THOP FLOPs, an optional
+      extra); `tsc` clean; headless **12/12**.
 
 ## ⚠ Blocker before `vsce publish` — set a real publisher ID
 
@@ -49,7 +51,7 @@ python -m twine upload --repository testpypi dist/*
 #   then in a clean venv: pip install -i https://test.pypi.org/simple/ \
 #   --extra-index-url https://pypi.org/simple netscope && python -c "import netscope"
 
-python -m twine upload dist/netscope-0.1.3*       # __token__ / pypi-<token>
+python -m twine upload dist/netscope-0.1.4*       # __token__ / pypi-<token>
 ```
 - [ ] Verify: `pip install netscope` in a clean venv works.
 
@@ -58,22 +60,22 @@ python -m twine upload dist/netscope-0.1.3*       # __token__ / pypi-<token>
 ```bash
 cd /Users/eren/Documents/AI/network_visualizer_ext/extension
 # 1. set the real publisher ID in package.json, then:
-npx @vscode/vsce package                          # rebuild netscope-0.1.3.vsix
+npx @vscode/vsce package                          # rebuild netscope-0.1.4.vsix
 npx @vscode/vsce login <publisher-id>             # paste the PAT
 npx @vscode/vsce publish                          # Marketplace
-npx ovsx publish netscope-0.1.3.vsix -p <token>   # Open VSX (Cursor)
+npx ovsx publish netscope-0.1.4.vsix -p <token>   # Open VSX (Cursor)
 ```
-- [ ] Sideload-test once: `cursor --install-extension netscope-0.1.3.vsix`.
+- [ ] Sideload-test once: `cursor --install-extension netscope-0.1.4.vsix`.
 
 ## Tag the release
 
 ```bash
-git tag v0.1.3 && git push origin v0.1.3
+git tag v0.1.4 && git push origin v0.1.4
 ```
 
-## After 0.1.3
+## After 0.1.4
 
-See [ROADMAP.md](ROADMAP.md). The "as you write" live engine, the LLM-augmented
-layer (assistant + inference + views), and the MCP server all landed in 0.1.x;
-next is deepening real-model coverage (fx on dynamic-control-flow models) and the
-generated-views surface.
+See [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md). 0.1.4 adds trace
+diffing, the profiler + cost heatmap, the role lens, the generation timeline, and
+the playground. Still open: the `scope=` capture API and the deeper LLM views
+(attention-weight maps, KV-cache shapes) that need value / multi-forward capture.

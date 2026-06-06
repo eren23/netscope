@@ -5,7 +5,9 @@ Nothing is on PyPI yet — the first published release is pending.
 
 ## [Unreleased]
 
-A substantial feature batch on `main` (would be **0.1.4**):
+_Nothing yet._
+
+## [0.1.4]
 
 ### Added
 - **Trace diffing** — `netscope.diff(before, after)` / `netscope.diff_view`, a CLI
@@ -18,10 +20,13 @@ A substantial feature batch on `main` (would be **0.1.4**):
   params. The zero-overhead, metadata-only default path is preserved.
 - **Role lens** — `netscope.roles(g)` + a "by role" graph overlay coloring nodes
   by architectural role (attention / MLP / norm / embedding).
+- **Generation timeline** — `netscope.step()` marks each decode step (auto-numbered,
+  timed under profile); `netscope.timeline(g)` returns per-step sequence-growth +
+  latency, and the steps render as a left-to-right, cost-colorable timeline.
 - **Playground** — `python -m netscope.playground`, a local split-view editor ⇄
   live graph (trace / static / profile / diff modes).
 - **Extension** — `Run & Trace (Profiled)` and `Diff with Last Trace` commands.
-- **Demo videos** (`docs/video/`) + a README front door and "See it live" gallery.
+- **Demo videos** (`docs/video/`) + a README front door and a "See it live" gallery.
 
 ### Fixed
 - Mismatch checker is now rank-aware: encoder→decoder **sequence-length**
