@@ -18,10 +18,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install (CPU torch + transformers + dev)
+      - name: Install (CPU torch + torchvision + transformers + dev)
         run: |
           python -m pip install --upgrade pip
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install transformers
           pip install -e ".[dev]"
       - name: Run the suite
@@ -35,6 +35,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Provision .venv for the headless integration tests
+        # headless.js shells out to <repo>/.venv/bin/python and executes the demo
+        # models (examples/sfumato_cmajc.py, mismatch_demo.py), which need torch +
+        # netscope. Provide exactly that venv so the real run -> webview path runs.
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
+          .venv/bin/pip install -e .
       - name: Build + test the extension
         working-directory: extension
         run: |

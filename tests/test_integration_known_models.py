@@ -7,6 +7,7 @@ exactly 11,689,512 params summed across module nodes (the canonical count).
 """
 from __future__ import annotations
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -46,6 +47,7 @@ def test_multihead_attention_tuple_output_is_handled_gracefully():
 
 
 def test_resnet18_captured_hierarchy_and_params():
+    pytest.importorskip("torchvision")
     from torchvision.models import resnet18
 
     model = resnet18(weights=None).eval()

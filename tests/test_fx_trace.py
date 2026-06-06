@@ -39,6 +39,7 @@ def test_fx_traces_a_simple_mlp():
 
 
 def test_fx_traces_resnet18():
+    pytest.importorskip("torchvision")
     from torchvision.models import resnet18
     g = trace_model(resnet18(weights=None))
     assert g is not None

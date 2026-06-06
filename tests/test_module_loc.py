@@ -8,6 +8,7 @@ sit on it. Pure AST, no execution.
 """
 from __future__ import annotations
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -109,6 +110,7 @@ def test_root_module_gets_loc_from_class_def():
     """A directly-called custom module (the trace root, qualname '') resolves to
     its class-definition line — so click-to-source works on the model itself, not
     just its submodules. resnet18 has a real source file (torchvision)."""
+    pytest.importorskip("torchvision")
     from torchvision.models import resnet18
     model = resnet18(weights=None).train(False)
     with netscope.graph("r") as g, torch.no_grad():
