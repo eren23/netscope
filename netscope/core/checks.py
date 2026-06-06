@@ -51,8 +51,14 @@ def _feature_axis(rank: int, conv: bool = False) -> int:
     return rank - 1
 
 
-def _check_edge(a, b, src, dst) -> Optional[dict]:
-    a_shape = _shape((a.get("meta") or {}).get("out_shape"))
+def _check_edge(a, b, src, dst, edge_shape=None) -> Optional[dict]:
+    # prefer the ACTUAL tensor that flowed on THIS edge (edge.tensor_meta) over the
+    # producer node's single representative out_shape. A multi-output module — an
+    # FPN / multi-scale backbone returning several feature maps ([512,28,28],
+    # [1024,14,14], …) — has one out_shape but feeds different-dim tensors down
+    # different edges; comparing the node shape there false-flags the consumers
+    # wired to the other scales (the RT-DETR / detection-model dogfood bug).
+    a_shape = _shape(edge_shape) or _shape((a.get("meta") or {}).get("out_shape"))
     b_shape = _shape((b.get("meta") or {}).get("in_shape"))
     if a_shape is None or b_shape is None:
         return None
@@ -98,7 +104,7 @@ def detect_mismatches(graph) -> list:
         b = nodes.get(e["dst"])
         if not a or not b:
             continue
-        w = _check_edge(a, b, e["src"], e["dst"])
+        w = _check_edge(a, b, e["src"], e["dst"], (e.get("tensor_meta") or {}).get("shape"))
         if w is not None:
             warnings.append(w)
     return warnings

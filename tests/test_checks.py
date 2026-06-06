@@ -132,6 +132,28 @@ def test_conv1d_channel_change_is_flagged():
     assert len(w) == 1 and w[0]["kind"] == "shape_mismatch"
 
 
+def test_multi_output_producer_compares_per_edge_not_node_shape():
+    # a multi-scale backbone (FPN / RT-DETR) has ONE representative out_shape but
+    # feeds different-dim feature maps down different edges (carried in tensor_meta).
+    # Each edge must be checked against the tensor that actually flowed on it.
+    g = NVGraph("m")
+    g.add_node("bb", kind="module", name="backbone", meta={"out_shape": [1, 512, 28, 28]})
+    g.add_node("p0", kind="module", name="proj0", meta={"in_shape": [1, 512, 28, 28]})
+    g.add_node("p1", kind="module", name="proj1", meta={"in_shape": [1, 1024, 14, 14]})
+    g.add_edge("bb", "p0", kind="dataflow", tensor_meta={"shape": [1, 512, 28, 28]})
+    g.add_edge("bb", "p1", kind="dataflow", tensor_meta={"shape": [1, 1024, 14, 14]})
+    assert detect_mismatches(g) == []   # each scale matches its own proj — no false alarm
+
+
+def test_edge_shape_still_catches_a_real_clash():
+    g = NVGraph("m")
+    g.add_node("a", kind="module", name="A", meta={"out_shape": [1, 256]})
+    g.add_node("b", kind="module", name="B", meta={"in_shape": [1, 128]})
+    g.add_edge("a", "b", kind="dataflow", tensor_meta={"shape": [1, 256]})  # 256 -> 128
+    w = detect_mismatches(g)
+    assert len(w) == 1 and "256" in w[0]["detail"] and "128" in w[0]["detail"]
+
+
 def test_capture_attaches_warnings_to_graph_dict():
     import netscope
 
