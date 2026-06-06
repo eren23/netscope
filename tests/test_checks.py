@@ -111,6 +111,27 @@ def test_conv_spatial_difference_is_not_flagged():
     assert detect_mismatches(g) == []
 
 
+def _conv_edge(a_out, b_in):
+    g = NVGraph("m")
+    g.add_node("a", kind="module", name="Conv1d", meta={"out_shape": a_out})
+    g.add_node("b", kind="module", name="Conv1d", meta={"in_shape": b_in})
+    g.add_edge("a", "b", kind="dataflow")
+    return g
+
+
+def test_conv1d_length_change_is_not_flagged():
+    # Conv1d (N,C,L): channels match (8), only length changes (18->9 under a stride)
+    # — legit, must not flag (the old rank-3=last-axis rule false-flagged this).
+    assert detect_mismatches(_conv_edge([2, 8, 18], [2, 8, 9])) == []
+
+
+def test_conv1d_channel_change_is_flagged():
+    # a real Conv1d channel clash (8 -> 16 on axis 1) must be caught (the old rule
+    # silently missed it by comparing the last axis).
+    w = detect_mismatches(_conv_edge([2, 8, 18], [2, 16, 18]))
+    assert len(w) == 1 and w[0]["kind"] == "shape_mismatch"
+
+
 def test_capture_attaches_warnings_to_graph_dict():
     import netscope
 

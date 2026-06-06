@@ -3,12 +3,6 @@ terminal-pasteable diagrams. `contains` edges are skipped (hierarchy is shown
 via labels rather than Mermaid subgraphs to keep it robust)."""
 from __future__ import annotations
 
-import re
-
-
-def _safe(node_id: str) -> str:
-    return re.sub(r"\W", "_", node_id)
-
 
 def _label(node: dict) -> str:
     name = node["name"]
@@ -20,10 +14,17 @@ def _label(node: dict) -> str:
 
 def to_mermaid(g) -> str:
     lines = ["flowchart TD"]
+    # injective id mapping: distinct node ids -> distinct n0/n1/… so that ids which
+    # differ only in non-word chars (`a.b` vs `a/b`) don't collide into one node.
+    ids: dict = {}
+
+    def sid(node_id: str) -> str:
+        return ids.setdefault(node_id, f"n{len(ids)}")
+
     for n in g.nodes():
-        lines.append(f'  {_safe(n["id"])}["{_label(n)}"]')
+        lines.append(f'  {sid(n["id"])}["{_label(n)}"]')
     for e in g.edges():
         if e["kind"] == "contains":
             continue
-        lines.append(f'  {_safe(e["src"])} --> {_safe(e["dst"])}')
+        lines.append(f'  {sid(e["src"])} --> {sid(e["dst"])}')
     return "\n".join(lines)

@@ -324,7 +324,13 @@ class TorchForwardInstrumentor:
                     pass  # some tensor subclasses don't support weakref
 
         pre_handle = register_module_forward_pre_hook(pre)
-        post_handle = register_module_forward_hook(post)
+        # always_call=True so the post-hook fires even when a forward RAISES — then
+        # `pending`/`starts`/the parent stack unwind cleanly instead of leaking a
+        # half-open span that would mis-parent and mislabel the next forward.
+        try:
+            post_handle = register_module_forward_hook(post, always_call=True)
+        except TypeError:
+            post_handle = register_module_forward_hook(post)   # older torch: no always_call
         # `extra` is a live reference: per-module isolation hooks appended during
         # the run land here and get removed on exit alongside the global pair.
         return (pre_handle, post_handle, extra)

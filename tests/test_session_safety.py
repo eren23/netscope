@@ -46,3 +46,35 @@ def test_sequential_sessions_each_capture_cleanly():
         m(torch.randn(1, 4))
     assert len(ga.nodes()) == 1
     assert len(gb.nodes()) == 1
+
+
+def test_exception_in_forward_does_not_corrupt_the_next_trace():
+    """A forward that RAISES mid-run must not leak a half-open span that
+    mis-parents / mislabels the next model in the same session (always_call=True
+    on the post-hook unwinds it)."""
+    class Boom(nn.Module):
+        def __init__(s):
+            super().__init__(); s.lin = nn.Linear(4, 4)
+        def forward(s, x):
+            s.lin(x); raise RuntimeError("boom")
+
+    class Clean(nn.Module):
+        def __init__(s):
+            super().__init__(); s.head = nn.Linear(4, 2)
+        def forward(s, x):
+            return s.head(x)
+
+    with netscope.graph("g", profile=True) as g, torch.no_grad():
+        try:
+            Boom()(torch.randn(2, 4))
+        except RuntimeError:
+            pass
+        Clean()(torch.randn(2, 4))
+
+    by_id = {n["id"]: n for n in g.nodes()}
+    head = [n for n in g.nodes() if (n.get("meta") or {}).get("qualname") == "head"]
+    assert head, "Clean.head should still be captured + correctly labeled"
+    ancestry, n = [], head[0]
+    while n.get("parent"):
+        n = by_id[n["parent"]]; ancestry.append(n["name"])
+    assert "Boom" not in ancestry and "Clean" in ancestry   # parented under Clean, not Boom

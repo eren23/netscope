@@ -50,5 +50,7 @@ def timeline(graph) -> list:
             "modules": modules,
             "out_shape": out_shape,
         })
-    steps.sort(key=lambda s: s["step"])
+    # group by type then value, so a stray non-int step label can't raise a
+    # TypeError comparing str vs int (real step markers are always ints).
+    steps.sort(key=lambda s: (type(s["step"]).__name__, s["step"]))
     return steps

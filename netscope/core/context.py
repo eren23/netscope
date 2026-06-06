@@ -2,8 +2,13 @@
 
 A single `ContextVar` holds the active `Capture` (None when not capturing — this
 is the zero-overhead gate instrumentors check first). A second `ContextVar`
-holds the parent-id stack used to nest spans. contextvars are task-local, so
-this is correct under threads and asyncio without extra work.
+holds the parent-id stack used to nest spans.
+
+Scope: capture is **single-flow per session**. The active-capture gate and parent
+stack are contextvars, so they're correct within one flow. But a model run in a
+*separate OS thread* gets a fresh (empty) context and won't be captured, and the
+torch hook's nesting state isn't shared across concurrently-suspended coroutines —
+so trace from one thread / one flow per `graph()`.
 """
 from __future__ import annotations
 

@@ -117,6 +117,10 @@ class NVGraph:
                 loc=n.get("loc"), meta=n.get("meta"), attrs=n.get("attrs"),
             )
         for e in data.get("edges", []):
+            # skip dangling edges — nx.add_edge would otherwise auto-create a junk
+            # endpoint node (kind/name None) from a truncated or hand-edited trace.
+            if not (g.has_node(e.get("src")) and g.has_node(e.get("dst"))):
+                continue
             g.add_edge(
                 e["src"], e["dst"], kind=e.get("kind", "dataflow"),
                 tensor_meta=e.get("tensor_meta"), source=e.get("source", "runtime"),

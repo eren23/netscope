@@ -28,17 +28,26 @@ def _label(node) -> str:
     return q or node["name"]
 
 
-def _feature_axis(rank: int) -> int:
+def _is_conv(node) -> bool:
+    """Does this node look like a conv/pooling op (channels-first layout)?"""
+    s = f"{node.get('name', '')} {(node.get('meta') or {}).get('qualname', '')}".lower()
+    return "conv" in s or "pool" in s
+
+
+def _feature_axis(rank: int, conv: bool = False) -> int:
     """The axis carrying the channel/feature dim, by PyTorch layout convention.
 
-    4-D NCHW → channels live at axis 1 (H/W are spatial, change freely under
-    stride/pool). Everything else (2-D NC, 3-D NSC) → the LAST axis is the
-    feature/embedding dim; axis 1 of a 3-D tensor is the SEQUENCE length, which
-    legitimately differs across a cross-attention edge. Returning the right axis
-    is what keeps us from flagging seq-length / spatial changes as wiring bugs.
+    4-D NCHW (and conv 3-D NCL) → channels at axis 1 (spatial H/W/L change freely
+    under stride/pool). Non-conv 2-D NC / 3-D NSC → the LAST axis is the feature/
+    embedding dim; axis 1 of a 3-D NSC tensor is the SEQUENCE length, which differs
+    legitimately across a cross-attention edge. Getting this right keeps us from
+    flagging seq-length / spatial changes — while still catching a Conv1d channel
+    clash (which the old rank-3=last-axis assumption silently missed).
     """
     if rank == 4:
         return 1
+    if rank == 3:
+        return 1 if conv else 2     # NCL (conv) vs NSC (transformer)
     return rank - 1
 
 
@@ -71,7 +80,7 @@ def _check_edge(a, b, src, dst) -> Optional[dict]:
     #    rule; flagging encoder src_len vs decoder tgt_len was the dogfood bug).
     if len(a_shape) < 2:
         return None   # rank-1: no batch/feature split to reason about
-    fa = _feature_axis(len(a_shape))
+    fa = _feature_axis(len(a_shape), conv=_is_conv(a) or _is_conv(b))
     if a_shape[fa] != b_shape[fa]:
         detail = (f"{a_name} emits dim {a_shape[fa]} but "
                   f"{b_name} expects {b_shape[fa]} (axis {fa})")

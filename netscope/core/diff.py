@@ -39,15 +39,24 @@ def _key(node: dict) -> tuple:
     return ("n", node.get("name"), node.get("parent"))
 
 
-def _index(graph: NVGraph) -> dict:
-    """key -> node. On a key collision (two nodes share a qualname/loc) the first
-    wins; collisions are rare and the diff degrades to treating the rest as
-    add/remove, which is honest rather than wrong."""
-    idx = {}
+def _occ_keyed(graph: NVGraph) -> list:
+    """[(occ_key, node)] — `occ_key` disambiguates siblings that share a `_key`
+    (e.g. two ops with the same name+parent and no qualname/loc). The first
+    occurrence keeps the bare key; later ones get a `(key, n)` suffix. Without this
+    such siblings collapse in the index and a genuine add/remove is hidden."""
+    seen: dict = {}
+    out = []
     for n in graph.nodes():
         k = _key(n)
-        idx.setdefault(k, n)
-    return idx
+        c = seen.get(k, 0)
+        seen[k] = c + 1
+        out.append((k if c == 0 else (k, c), n))
+    return out
+
+
+def _index(graph: NVGraph) -> dict:
+    """occ_key -> node (see _occ_keyed)."""
+    return {ok: n for ok, n in _occ_keyed(graph)}
 
 
 def _summary(node: dict, key: tuple) -> dict:
@@ -126,21 +135,22 @@ def annotate_diff(before: NVGraph, after: NVGraph) -> NVGraph:
     surviving node where possible)."""
     d = diff_graphs(before, after)
     changed_by_key = {c["key"]: c for c in d["changed"]}
-    bidx, aidx = _index(before), _index(after)
-    after_key_to_id = {k: n["id"] for k, n in aidx.items()}
+    after_occ = _occ_keyed(after)
+    bidx = _index(before)
+    aidx = {ok: n for ok, n in after_occ}
+    after_id_by_key = {ok: n["id"] for ok, n in after_occ}
 
     out = NVGraph(name=after.name or before.name)
 
-    for n in after.nodes():
-        k = _key(n)
-        if k in bidx:
-            tag = "changed" if k in changed_by_key else "same"
+    for ok, n in after_occ:
+        if ok in bidx:
+            tag = "changed" if ok in changed_by_key else "same"
         else:
             tag = "added"
         attrs = dict(n.get("attrs") or {})
         attrs["diff"] = tag
         if tag == "changed":
-            attrs["diff_detail"] = _detail_str(changed_by_key[k])
+            attrs["diff_detail"] = _detail_str(changed_by_key[ok])
         out.add_node(n["id"], kind=n["kind"], name=n["name"], parent=n.get("parent"),
                      source=n.get("source", "runtime"), loc=n.get("loc"),
                      meta=n.get("meta"), attrs=attrs)
@@ -151,13 +161,18 @@ def annotate_diff(before: NVGraph, after: NVGraph) -> NVGraph:
                      source=e.get("source", "runtime"), condition=e.get("condition"))
 
     # ghost the removed nodes so you can see what disappeared.
-    before_id_key = {n["id"]: _key(n) for n in before.nodes()}
-    for n in before.nodes():
-        k = _key(n)
-        if k in aidx:
+    before_key_by_id = {n["id"]: ok for ok, n in _occ_keyed(before)}
+    for ok, n in _occ_keyed(before):
+        if ok in aidx:
             continue
         p: Optional[str] = n.get("parent")
-        new_parent = after_key_to_id.get(before_id_key.get(p)) if p else None
+        new_parent = None
+        if p is not None:
+            # parent still in `after` -> attach there; else if the parent was ALSO
+            # removed, attach to ITS ghost (don't flatten removed subtrees to root).
+            new_parent = after_id_by_key.get(before_key_by_id.get(p))
+            if new_parent is None and p in before_key_by_id:
+                new_parent = f"removed::{p}"
         attrs = dict(n.get("attrs") or {})
         attrs["diff"] = "removed"
         out.add_node(f"removed::{n['id']}", kind=n["kind"], name=n["name"],

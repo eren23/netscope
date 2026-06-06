@@ -91,4 +91,14 @@ def merge(runtime: NVGraph, static: NVGraph) -> NVGraph:
             attrs=attrs,
         )
 
+    # 4) static-only edges whose BOTH endpoints survived into the fused graph (a
+    #    vote/branch wiring the runtime never captured). Mirrors mergeByLoc.ts — an
+    #    endpoint that fused into a runtime node by loc no longer exists under its
+    #    static id, so that edge is dropped rather than left dangling.
+    for e in static.edges():
+        if fused.has_node(e["src"]) and fused.has_node(e["dst"]):
+            fused.add_edge(e["src"], e["dst"], kind=e["kind"],
+                           tensor_meta=e.get("tensor_meta"),
+                           source=e.get("source", "static"), condition=e.get("condition"))
+
     return fused

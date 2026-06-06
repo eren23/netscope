@@ -148,6 +148,41 @@ def test_cli_graph_json_writes_annotated_ir(tmp_path):
     assert "changed" in tags
 
 
+def test_sibling_key_collision_is_not_collapsed():
+    # two ops sharing name+parent with no qualname/loc must stay distinct, so a
+    # genuine removal isn't hidden by the index collapsing them.
+    a, b = NVGraph("m"), NVGraph("m")
+    for g, n in [(a, 2), (b, 1)]:
+        g.add_node("p", kind="stage", name="P")
+        for i in range(n):
+            g.add_node(f"add{i}", kind="op", name="add", parent="p")
+    assert diff_graphs(a, b)["summary"]["removed"] == 1
+
+
+def test_removed_subtree_ghost_keeps_its_parent():
+    # when a parent AND its child are removed, the child ghost must attach to the
+    # parent's ghost, not flatten to root.
+    a, b = NVGraph("m"), NVGraph("m")
+    a.add_node("blk", kind="module", name="Block", meta={"qualname": "block"})
+    a.add_node("lin", kind="module", name="Linear", parent="blk",
+               meta={"qualname": "block.lin"})
+    b.add_node("keep", kind="module", name="Keep", meta={"qualname": "keep"})
+    g = annotate_diff(a, b)
+    ghost = {(n.get("meta") or {}).get("qualname"): n for n in g.nodes()
+             if (n.get("attrs") or {}).get("diff") == "removed"}
+    assert "block" in ghost and "block.lin" in ghost
+    assert ghost["block.lin"]["parent"] == "removed::blk"
+
+
+def test_from_dict_skips_dangling_edges():
+    a = NVGraph.from_dict({
+        "nodes": [{"id": "a", "kind": "module", "name": "A"}],
+        "edges": [{"src": "a", "dst": "GHOST", "kind": "dataflow"}],
+    })
+    assert a.has_node("a") and not a.has_node("GHOST")   # no junk node auto-created
+    assert a.edges() == []
+
+
 def test_diff_survives_a_to_dict_round_trip():
     """Two SAVED traces (JSON dumps) diff the same as live graphs — the path the
     extension/CLI takes."""
