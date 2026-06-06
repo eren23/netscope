@@ -24,14 +24,14 @@ red** before they blow up at runtime. No decorators, ~zero overhead, no CDN.
 Recorded live in the editor — every keystroke re-analyzed, the graph updated as
 you work. **Try it yourself:** `python -m netscope.playground` opens this split
 view in your browser (paste a model, watch it analyzed — trace / static / profile
-/ diff modes).
+/ diff modes). Or watch the **▶ [40-second full tour](docs/video/netscope-reel.mp4)**.
 
 |  |  |
 |:--|:--|
 | **Build a model — real shapes appear** | **Diff two versions** — 🟢 added · 🟡 changed |
 | ![shapes as you write](docs/video/shapes.gif) | ![diff two model versions](docs/video/diff.gif) |
-| **Profile by cost** — the fat layer glows red | **▶ [40-second full tour](docs/video/netscope-reel.mp4)** |
-| ![profile cost heatmap](docs/video/profile.gif) | the same loop, end to end |
+| **Profile by cost** — the fat layer glows red | **Color by role** — attention / MLP / norm |
+| ![profile cost heatmap](docs/video/profile.gif) | ![color a transformer by role](docs/video/roles.gif) |
 
 ## Why
 

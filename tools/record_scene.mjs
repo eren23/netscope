@@ -50,6 +50,8 @@ const DIFF_V2 = `model = nn.Sequential(\n    nn.Linear(64, 256),\n    nn.ReLU(),
 
 const FAT = `model = nn.Sequential(\n    nn.Linear(64, 1024),\n    nn.ReLU(),\n    nn.Linear(1024, 1024),\n    nn.ReLU(),\n    nn.Linear(1024, 10),\n)\nx = torch.randn(8, 64)\n`;
 
+const ENCODER = `import torch, torch.nn as nn\n\nlayer = nn.TransformerEncoderLayer(64, 8, batch_first=True)\nmodel = nn.TransformerEncoder(layer, num_layers=2)\nx = torch.randn(2, 10, 64)\n`;
+
 async function sceneBug(p) {
   await mode_(p, 'static');
   await cap_(p, 'Wiring an encoder into a classifier head — as you type.');
@@ -106,7 +108,26 @@ async function sceneProfile(p) {
   await sleep(3200);
 }
 
-const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile };
+async function sceneRoles(p) {
+  await mode_(p, 'trace');
+  await cap_(p, 'A transformer — attention, norm and feed-forward, stacked.');
+  await sleep(800);
+  await set_(p, ENCODER);
+  await sleep(2600);
+  const fr = await graphFrame(p);
+  if (fr) {
+    // unfold the repeated encoder layers so the per-block leaves are visible
+    await fr.evaluate(() => {
+      if (window.ecApi) cy.nodes().forEach((n) => { if (n.isParent()) window.ecApi.expand(n); });
+    });
+    await sleep(600);
+  }
+  await cap_(p, 'Color by <b>role</b> — attention, norm and feed-forward pop out.');
+  if (fr) await fr.evaluate(() => { const b = document.getElementById('btn-role'); if (b) b.click(); });
+  await sleep(3200);
+}
+
+const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile, roles: sceneRoles };
 
 (async () => {
   const run = SCENES[scene];
