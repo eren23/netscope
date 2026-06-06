@@ -255,5 +255,14 @@ def add_declared_dims(graph, source: str, filename: str) -> None:
         for siblings in by_container.values():
             siblings.sort()
             for (_, prev), (_, nxt) in zip(siblings, siblings[1:]):
-                if prev in ids and nxt in ids:
-                    graph.add_edge(ids[prev], ids[nxt], kind="dataflow", source="static")
+                if prev not in ids or nxt not in ids:
+                    continue
+                # a Conv -> Linear hop crosses an implicit flatten() (siblings are
+                # filtered to dim-bearing layers, so the ReLU/Flatten between them
+                # is invisible here). Channels vs flattened-features aren't directly
+                # comparable, so DON'T wire it — that was a false-positive squiggle
+                # on idiomatic CNN heads.
+                pk, nk = layers[prev].kind.lower(), layers[nxt].kind.lower()
+                if "conv" in pk and "linear" in nk:
+                    continue
+                graph.add_edge(ids[prev], ids[nxt], kind="dataflow", source="static")

@@ -133,19 +133,33 @@ def _text(payload: Any, is_error: bool = False) -> Dict[str, Any]:
 def _tool_trace_file(args: dict) -> Dict[str, Any]:
     path = args.get("file")
     mode = args.get("mode", "static")
+    if mode not in ("static", "run"):
+        return _text(f"unknown mode {mode!r} (expected 'static' or 'run')", is_error=True)
     if not path or not os.path.exists(path):
         return _text(f"file not found: {path!r}", is_error=True)
     try:
         if mode == "run":
             import tempfile
-            out = tempfile.mktemp(suffix=".json")
-            env = dict(os.environ, NETSCOPE_OUT=out)
-            subprocess.run([sys.executable, path], env=env, capture_output=True, timeout=300)
-            if not os.path.exists(out):
-                return _text("the script produced no graph — wrap a forward in "
-                             "`with netscope.graph(\"name\"):`", is_error=True)
-            return _text(json.load(open(out)))
-        # static
+            fd, out = tempfile.mkstemp(suffix=".json")   # mkstemp, not the race-prone mktemp
+            os.close(fd)
+            try:
+                env = dict(os.environ, NETSCOPE_OUT=out)
+                r = subprocess.run([sys.executable, path], env=env,
+                                   capture_output=True, text=True, timeout=300)
+                if not os.path.getsize(out):
+                    # surface the REAL failure instead of the generic "no graph".
+                    tail = "\n".join((r.stderr or r.stdout or "").strip().splitlines()[-12:])
+                    if r.returncode != 0:
+                        return _text(f"the script exited with code {r.returncode}:\n"
+                                     f"{tail or '(no output)'}", is_error=True)
+                    return _text("the script ran but produced no graph — wrap a forward "
+                                 "in `with netscope.graph(\"name\"):`\n" + tail, is_error=True)
+                return _text(json.load(open(out)))
+            finally:
+                try:
+                    os.unlink(out)
+                except OSError:
+                    pass
         from netscope.static.ast_producer import analyze_file
         return _text(analyze_file(path).to_dict())
     except Exception as e:  # never crash the server on a bad file
@@ -215,7 +229,10 @@ def _tool_explain_node(args: dict) -> Dict[str, Any]:
                      "OPENROUTER_API_KEY / OPENAI_API_KEY) to use explain_node.",
                      is_error=True)
     try:
-        answer = explain(g, node["id"], question=args.get("question", "explain"))
+        # the graph here came from a caller-supplied trace JSON (untrusted) — restrict
+        # source-line reads to the project dir so a crafted loc.file can't be slurped.
+        answer = explain(g, node["id"], question=args.get("question", "explain"),
+                         source_root=os.getcwd())
         return _text(answer)
     except LLMUnavailable as e:
         return _text(str(e), is_error=True)

@@ -33,12 +33,15 @@ def explain(
     *,
     question: str = "explain",
     provider: Optional[Provider] = None,
+    source_root: Optional[str] = None,
     _transport: Optional[Transport] = None,
 ) -> str:
     """Answer a question about `node_id`, grounded in the graph + source.
 
     question: "explain" | "why_warn" | "suggest_fix".
-    Raises LLMUnavailable if no provider is configured.
+    source_root: restrict source-line reads to this dir — pass it when the graph
+    came from an untrusted saved trace (the MCP path) so a crafted `loc.file`
+    can't read arbitrary files. Raises LLMUnavailable if no provider is configured.
     """
     provider = provider or Provider.from_env()
     if provider is None:
@@ -46,7 +49,7 @@ def explain(
             "no LLM provider configured — set NETSCOPE_LLM_API_KEY (or "
             "OPENROUTER_API_KEY / OPENAI_API_KEY). netscope works fully without it."
         )
-    messages = build_messages(graph, node_id, question=question)
+    messages = build_messages(graph, node_id, question=question, source_root=source_root)
     return provider.complete(messages, _transport=_transport)
 
 

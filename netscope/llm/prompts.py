@@ -9,6 +9,7 @@ graph, it doesn't invent architecture.
 """
 from __future__ import annotations
 
+import os
 from typing import List, Optional
 
 _SYSTEM = (
@@ -86,12 +87,25 @@ def _warning_block(graph, node_id: str) -> Optional[str]:
     return "warnings:\n" + "\n".join(f"  - {w['detail']}" for w in hits)
 
 
-def _source_block(node: dict, context: int = 2) -> Optional[str]:
+def _source_block(node: dict, context: int = 2, root: Optional[str] = None) -> Optional[str]:
     loc = node.get("loc")
     if not loc or not loc.get("file") or not loc.get("line"):
         return None
+    path = loc["file"]
+    # `root` (set on the MCP path, where the graph came from an UNTRUSTED saved
+    # trace) restricts source reads to that tree, so a crafted `loc.file=/etc/...`
+    # can't be slurped into the prompt. Unset (the in-process library path) reads
+    # freely — there the graph is the user's own live trace.
+    if root is not None:
+        try:
+            real, base = os.path.realpath(path), os.path.realpath(root)
+            if real != base and os.path.commonpath([real, base]) != base:
+                return None
+            path = real
+        except (OSError, ValueError):
+            return None
     try:
-        with open(loc["file"], encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             src = f.read().splitlines()
     except (OSError, UnicodeDecodeError):
         return None
@@ -108,8 +122,12 @@ def _source_block(node: dict, context: int = 2) -> Optional[str]:
     return "source near " + loc["file"].split("/")[-1] + ":\n" + "\n".join(out)
 
 
-def build_messages(graph, node_id: str, *, question: str = "explain") -> List[dict]:
-    """Build grounded [system, user] messages for a node + question kind."""
+def build_messages(graph, node_id: str, *, question: str = "explain",
+                   source_root: Optional[str] = None) -> List[dict]:
+    """Build grounded [system, user] messages for a node + question kind.
+
+    source_root: if set, source lines are only read from files under this dir —
+    pass it when the graph came from an untrusted saved trace (the MCP path)."""
     by_id = {n["id"]: n for n in graph.nodes()}
     node = by_id.get(node_id)
     if node is None:
@@ -120,7 +138,7 @@ def build_messages(graph, node_id: str, *, question: str = "explain") -> List[di
     warn = _warning_block(graph, node_id)
     if warn:
         parts.append(warn)
-    source = _source_block(node)
+    source = _source_block(node, root=source_root)
     if source:
         parts.append(source)
     context = "\n\n".join(parts)
