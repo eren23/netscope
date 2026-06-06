@@ -7,7 +7,7 @@ PyTorch / Hugging Face pipeline — real per-layer tensor shapes, the actual
 dataflow, repeated blocks folded into one, and **shape mismatches flagged in
 red** before they blow up at runtime. No decorators, ~zero overhead, no CDN.
 
-![catch a shape mismatch as you type](docs/video/bug.gif)
+![catch a shape mismatch as you type](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/bug.gif)
 
 > *Wire an encoder's 256-dim output into a head that expects 128 — netscope flags
 > it red **as you type**, before you ever run.* &nbsp;([more clips ↓](#see-it-live))
@@ -15,7 +15,7 @@ red** before they blow up at runtime. No decorators, ~zero overhead, no CDN.
 > Working name. The hero demo is [sfumato](https://github.com/eren23/sfumato) —
 > a hybrid AR (Qwen) + diffusion (LLaDA) reasoning pipeline.
 
-![sfumato cmajc pipeline](docs/img/sfumato.png)
+![sfumato cmajc pipeline](https://raw.githubusercontent.com/eren23/netscope/main/docs/img/sfumato.png)
 
 ---
 
@@ -24,14 +24,14 @@ red** before they blow up at runtime. No decorators, ~zero overhead, no CDN.
 Recorded live in the editor — every keystroke re-analyzed, the graph updated as
 you work. **Try it yourself:** `python -m netscope.playground` opens this split
 view in your browser (paste a model, watch it analyzed — trace / static / profile
-/ diff modes). Or watch the **▶ [40-second full tour](docs/video/netscope-reel.mp4)**.
+/ diff modes). Or watch the **▶ [40-second full tour](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/netscope-reel.mp4)**.
 
 |  |  |
 |:--|:--|
 | **Build a model — real shapes appear** | **Diff two versions** — 🟢 added · 🟡 changed |
-| ![shapes as you write](docs/video/shapes.gif) | ![diff two model versions](docs/video/diff.gif) |
+| ![shapes as you write](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/shapes.gif) | ![diff two model versions](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/diff.gif) |
 | **Profile by cost** — the fat layer glows red | **Color by role** — attention / MLP / norm |
-| ![profile cost heatmap](docs/video/profile.gif) | ![color a transformer by role](docs/video/roles.gif) |
+| ![profile cost heatmap](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/profile.gif) | ![color a transformer by role](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/roles.gif) |
 
 ## Why
 
@@ -53,6 +53,11 @@ pip install netscope          # the engine + standalone HTML renderer (needs PyT
 > First PyPI release pending — until it lands, install from a clone with
 > `pip install -e .`. The VSCode / Cursor extension lives in `extension/`; the
 > fastest way to *try* netscope with no editor is `python -m netscope.playground`.
+
+**Requirements:** Python ≥ 3.9 and **PyTorch** (install it for your platform
+first — it's intentionally not a hard dependency, since torch wheels are large and
+platform-specific). Add `transformers` too if you trace Hugging Face models.
+netscope itself is light — just `wrapt` + `networkx`.
 
 ## Quickstart
 
@@ -126,18 +131,18 @@ type — `trace` / `static` / `profile` / `diff` modes. It's the clips above, li
 and local. (It runs your code to trace it — the same trust as `python yourfile.py`,
 bound to localhost.)
 
-![the netscope playground — type a model, switch modes, color by cost](docs/video/playground.gif)
+![the netscope playground — type a model, switch modes, color by cost](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/playground.gif)
 
 ## Gallery
 
 A real LLM architecture — **Qwen3** built from its Hub config (no weight
 download), decoder layers folded:
 
-![Qwen3 pipeline](docs/img/qwen3.png)
+![Qwen3 pipeline](https://raw.githubusercontent.com/eren23/netscope/main/docs/img/qwen3.png)
 
 A **shape mismatch** caught while wiring an encoder into a head:
 
-![mismatch warning](docs/img/mismatch.png)
+![mismatch warning](https://raw.githubusercontent.com/eren23/netscope/main/docs/img/mismatch.png)
 
 Run them yourself:
 
@@ -288,6 +293,10 @@ cd extension && npm run test:unit && npm run test:headless
 Optional extras: `pip install -e ".[flops]"` (THOP per-layer FLOPs),
 `".[otel]"` (OpenTelemetry export seam).
 
+New here? **[CONTRIBUTING.md](https://github.com/eren23/netscope/blob/main/CONTRIBUTING.md)** has the dev workflow + the two
+cross-language sync rules, and **[docs/API.md](https://github.com/eren23/netscope/blob/main/docs/API.md)** is the full API
+reference. Changes are logged in **[CHANGELOG.md](https://github.com/eren23/netscope/blob/main/CHANGELOG.md)**.
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/eren23/netscope/blob/main/LICENSE).

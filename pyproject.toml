@@ -29,6 +29,9 @@ email = "erenakbulutwork@gmail.com"
 Homepage = "https://github.com/eren23/netscope"
 Repository = "https://github.com/eren23/netscope"
 Issues = "https://github.com/eren23/netscope/issues"
+Changelog = "https://github.com/eren23/netscope/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/eren23/netscope/blob/main/docs/API.md"
+
 [tool.setuptools]
 include-package-data = true
 
@@ -37,7 +40,7 @@ include = ["netscope*"]
 
 
 [tool.setuptools.package-data]
-netscope = ["web/*.html", "web/**/*.html", "web/*.js", "web/**/*.js"]
+netscope = ["py.typed", "web/*.html", "web/**/*.html", "web/*.js", "web/**/*.js"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
