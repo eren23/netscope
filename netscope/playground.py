@@ -254,11 +254,18 @@ PAGE = r'''<!doctype html><html><head><meta charset="utf-8"><title>netscope · p
 </script></body></html>'''
 
 
-if __name__ == "__main__":
+def main(argv=None) -> int:
+    """CLI entry: `netscope playground [port] [--no-open]` (and `python -m netscope.playground`)."""
     import argparse
     ap = argparse.ArgumentParser(prog="netscope.playground",
                                  description="A local paste-a-model live netscope playground.")
     ap.add_argument("port", nargs="?", type=int, default=8770)
     ap.add_argument("--no-open", action="store_true", help="don't auto-open the browser")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     serve(a.port, open_browser=not a.no_open)
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())

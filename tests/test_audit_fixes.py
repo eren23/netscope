@@ -48,3 +48,18 @@ def test_mcp_trace_file_rejects_unknown_mode():
 
     r = _tool_trace_file({"file": "netscope/__init__.py", "mode": "bogus"})
     assert r.get("isError") is True
+
+
+def test_cli_dispatcher_routes_known_and_rejects_unknown():
+    import contextlib
+    import io
+
+    from netscope.__main__ import main
+
+    assert main([]) == 0          # no args -> usage, clean exit
+    assert main(["bogus"]) == 2   # unknown subcommand -> error code
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = main(["static", "examples/mismatch_demo.py"])
+    assert rc == 0 and '"nodes"' in buf.getvalue()   # routed to the static tool
