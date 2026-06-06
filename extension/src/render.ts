@@ -9,6 +9,26 @@ function label(n: any): string {
   return out ? `${n.name}\n[${out.join(", ")}]` : n.name;
 }
 
+// Mirror of netscope/enrich/roles.py:node_role — coarse architectural role from
+// the node's name + qualified path, for the transformer "color by role" lens.
+const ROLE_KEYS: [string, string[]][] = [
+  ["attention", ["attention", "attn", "mha", "self_attn", "selfattention", "crossattention"]],
+  ["mlp", ["mlp", "feedforward", "feed_forward", "ffn", "swiglu", "geglu", "moe", "experts"]],
+  ["norm", ["layernorm", "rmsnorm", "batchnorm", "groupnorm", "norm", "ln_f", "ln_1", "ln_2"]],
+  ["embedding", ["embedding", "embed", "wte", "wpe", "tok_emb", "pos_emb", "rotary"]],
+  ["activation", ["relu", "gelu", "silu", "swish", "sigmoid", "tanh", "softmax", "act_fn", "activation"]],
+  ["conv", ["conv", "pool"]],
+  ["linear", ["linear", "proj", "dense", "lm_head", "out_proj", "fc"]],
+];
+
+function nodeRole(n: any): string {
+  const s = `${n.name || ""} ${(n.meta && n.meta.qualname) || ""}`.toLowerCase();
+  for (const [role, keys] of ROLE_KEYS) {
+    if (keys.some((k) => s.includes(k))) return role;
+  }
+  return "other";
+}
+
 export function toElements(g: NVGraph): { nodes: any[]; edges: any[] } {
   // nodes/edges touched by a mismatch warning -> data.warn, so the renderer can
   // paint them red AND the node panel can offer a "why flagged?" assistant action.
@@ -25,6 +45,15 @@ export function toElements(g: NVGraph): { nodes: any[]; edges: any[] } {
     };
     if (n.parent) data.parent = n.parent;
     if (warnIds.has(n.id)) data.warn = true;
+    data.role = nodeRole(n);              // transformer "color by role" lens
+
+    // trace-diff tags (added|removed|changed|same) drive the green/amber styling;
+    // the cost overlay reads meta.* directly, so it needs nothing extra here.
+    const attrs = (n as unknown as { attrs?: Record<string, unknown> }).attrs || {};
+    if (attrs.diff) {
+      data.diff = attrs.diff;
+      if (attrs.diff_detail) data.diff_detail = attrs.diff_detail;
+    }
     return { data };
   });
 

@@ -117,11 +117,11 @@ function runStaticQuiet(file: string): Promise<NVGraph | null> {
   });
 }
 
-async function runAndTrace(file: string): Promise<NVGraph | null> {
+async function runAndTrace(file: string, extraEnv?: NodeJS.ProcessEnv): Promise<NVGraph | null> {
   const outPath = path.join(os.tmpdir(), `netscope-run-${process.pid}-${Date.now()}.json`);
   const r = await execAsync([file], {
     title: "netscope: running & tracing…",
-    env: { ...process.env, NETSCOPE_OUT: outPath },
+    env: { ...process.env, NETSCOPE_OUT: outPath, ...extraEnv },
   });
   if (r.code !== 0 && !fs.existsSync(outPath)) {
     // the script itself failed AND produced no graph -> surface the real error.
@@ -319,6 +319,21 @@ let lastTracedFile: string | undefined;   // the file behind the current graph, 
 let currentGraph: NVGraph | undefined;     // the graph in the panel, for the LLM assistant
 let currentGraphFile: string | undefined;  // which file the panel is showing
 let currentGraphTag: string | undefined;   // "static" | "runtime" | "fused" | "isolate:…"
+// the last two traces persisted to disk, so "Diff with Last Trace" can compare
+// before/after an edit. Rotated on every successful Run & Trace.
+let prevTracePath: string | undefined;
+let currTracePath: string | undefined;
+
+function persistTrace(ctx: vscode.ExtensionContext, graph: NVGraph): void {
+  const dir = ctx.globalStorageUri?.fsPath || os.tmpdir();
+  try { fs.mkdirSync(dir, { recursive: true }); } catch { /* ignore */ }
+  const prev = path.join(dir, "netscope-prev-trace.json");
+  const curr = path.join(dir, "netscope-curr-trace.json");
+  try { if (fs.existsSync(curr)) fs.copyFileSync(curr, prev); } catch { /* ignore */ }
+  try { fs.writeFileSync(curr, JSON.stringify(graph)); } catch { return; }
+  prevTracePath = fs.existsSync(prev) ? prev : undefined;
+  currTracePath = curr;
+}
 
 function show(ctx: vscode.ExtensionContext, graph: NVGraph, title: string): void {
   if (!panel) {
@@ -412,6 +427,24 @@ function applyEditorOverlays(file: string, graph: NVGraph): void {
   }
 }
 
+// Run & Trace (optionally profiled): static + runtime concurrently, fuse, render,
+// overlay the editor, and persist the trace so it can be diffed against the next.
+async function doRunAndTrace(
+  ctx: vscode.ExtensionContext, file: string, profiled: boolean
+): Promise<void> {
+  lastTracedFile = file;   // enable "isolate this part" on the resulting graph
+  const [staticG, runtimeG] = await Promise.all([
+    runStatic(file),
+    runAndTrace(file, profiled ? { NETSCOPE_PROFILE: "1" } : undefined),
+  ]);
+  const fused = runtimeG && staticG ? mergeByLoc(runtimeG, staticG) : runtimeG || staticG;
+  if (!fused) return;
+  const tag = runtimeG && staticG ? "fused" : runtimeG ? "runtime" : "static";
+  persistTrace(ctx, fused);   // remember for "Diff with Last Trace"
+  show(ctx, fused, `${path.basename(file)} (${tag})`);
+  applyEditorOverlays(file, fused);   // inline shapes + squiggles on the lines
+}
+
 export function activate(ctx: vscode.ExtensionContext): void {
   ctx.subscriptions.push(
     diagCollection,
@@ -446,17 +479,41 @@ export function activate(ctx: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("netscope.runAndTrace", async () => {
       const ed = vscode.window.activeTextEditor;
       if (!ed) return;
-      const file = ed.document.fileName;
-      lastTracedFile = file;   // enable "isolate this part" on the resulting graph
-      // static analysis and the traced run are independent — run them
-      // concurrently so the static skeleton doesn't add latency to the trace.
-      const [staticG, runtimeG] = await Promise.all([runStatic(file), runAndTrace(file)]);
-      const fused =
-        runtimeG && staticG ? mergeByLoc(runtimeG, staticG) : runtimeG || staticG;
-      if (!fused) return;
-      const tag = runtimeG && staticG ? "fused" : runtimeG ? "runtime" : "static";
-      show(ctx, fused, `${path.basename(file)} (${tag})`);
-      applyEditorOverlays(file, fused);   // inline shapes + squiggles on the lines
+      await doRunAndTrace(ctx, ed.document.fileName, false);
+    }),
+    // same trace, with per-layer wall-time captured (NETSCOPE_PROFILE) — the graph's
+    // "cost:" selector then recolors nodes by time / memory / params.
+    vscode.commands.registerCommand("netscope.runAndTraceProfiled", async () => {
+      const ed = vscode.window.activeTextEditor;
+      if (!ed) return;
+      await doRunAndTrace(ctx, ed.document.fileName, true);
+    }),
+    // Diff the last two traces: edit your model, Run & Trace again, then this paints
+    // what changed — green = added, amber = changed (shape/param deltas in the panel).
+    vscode.commands.registerCommand("netscope.diffWithLast", async () => {
+      if (!prevTracePath || !currTracePath ||
+          !fs.existsSync(prevTracePath) || !fs.existsSync(currTracePath)) {
+        vscode.window.showInformationMessage(
+          "netscope: need two traces to diff. Run & Trace, edit your model, then Run " +
+          "& Trace again — now 'Diff with Last Trace' shows exactly what changed."
+        );
+        return;
+      }
+      const out = path.join(os.tmpdir(), `netscope-diff-${process.pid}-${Date.now()}.json`);
+      const r = await execAsync(
+        ["-m", "netscope.core.diff", prevTracePath, currTracePath, "--graph-json", out],
+        { title: "netscope: diffing traces…" }
+      );
+      if (!fs.existsSync(out)) {
+        vscode.window.showWarningMessage(explainFailure(r));
+        return;
+      }
+      try {
+        const g = JSON.parse(fs.readFileSync(out, "utf-8")) as NVGraph;
+        show(ctx, g, `${path.basename(lastTracedFile || "trace")} (diff)`);
+      } catch { /* ignore */ } finally {
+        try { fs.unlinkSync(out); } catch { /* ignore */ }
+      }
     }),
     // validate the setup: is the python interpreter resolvable and is netscope
     // importable in it? Gives a store user an actionable answer instead of a

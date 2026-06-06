@@ -1,0 +1,132 @@
+// netscope playground video driver.
+// Drives the live playground, "types" a scripted scene, records 1280x720 video.
+//   1. python -m netscope.playground 8770 --no-open
+//   2. PW_PATH=<playwright dir> node tools/record_scene.mjs <scene>
+// scenes: bug | shapes | diff | profile
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.PW_PATH || 'playwright');
+
+const URL = process.env.HARNESS_URL || 'http://localhost:8770/';
+const OUT = process.env.OUT_DIR || '/tmp/netscope-vids';
+const scene = process.argv[2] || 'bug';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// --- page driver hooks (defined in tools/live_harness.py) ---
+const type_ = (p, t, per = 36) => p.evaluate(([t, per]) => window.nsType(t, per), [t, per]);
+const set_ = (p, t) => p.evaluate((t) => window.nsSet(t), t);
+const replace_ = (p, a, b) => p.evaluate(([a, b]) => window.nsReplace(a, b), [a, b]);
+const mode_ = (p, m, pr = false) => p.evaluate(([m, pr]) => window.nsSetMode(m, pr), [m, pr]);
+const cap_ = (p, t) => p.evaluate((t) => window.nsCaption(t), t);
+
+// the rendered graph lives in a srcdoc child frame; grab it (it swaps per edit).
+async function graphFrame(p) {
+  for (let i = 0; i < 25; i++) {
+    const fr = p.frames().find((f) => f !== p.mainFrame());
+    if (fr) return fr;
+    await sleep(120);
+  }
+  return null;
+}
+
+const BUGGY = [
+  'class Net(nn.Module):',
+  '    def __init__(self):',
+  '        super().__init__()',
+  '        self.enc  = nn.Linear(64, 256)',
+  '        self.head = nn.Linear(128, 10)',
+  '',
+  '    def forward(self, x):',
+  '        h = self.enc(x)',
+  '        return self.head(h)',
+  '',
+].join('\n');
+
+const mlp = (hidden) =>
+  `model = nn.Sequential(\n    nn.Linear(16, ${hidden}),\n    nn.ReLU(),\n    nn.Linear(${hidden}, 4),\n)\nx = torch.randn(8, 16)\n`;
+
+const DIFF_V1 = `model = nn.Sequential(\n    nn.Linear(64, 128),\n    nn.ReLU(),\n    nn.Linear(128, 10),\n)\nx = torch.randn(4, 64)\n`;
+const DIFF_V2 = `model = nn.Sequential(\n    nn.Linear(64, 256),\n    nn.ReLU(),\n    nn.Linear(256, 128),\n    nn.ReLU(),\n    nn.Linear(128, 10),\n)\nx = torch.randn(4, 64)\n`;
+
+const FAT = `model = nn.Sequential(\n    nn.Linear(64, 1024),\n    nn.ReLU(),\n    nn.Linear(1024, 1024),\n    nn.ReLU(),\n    nn.Linear(1024, 10),\n)\nx = torch.randn(8, 64)\n`;
+
+async function sceneBug(p) {
+  await mode_(p, 'static');
+  await cap_(p, 'Wiring an encoder into a classifier head — as you type.');
+  await sleep(900);
+  await type_(p, BUGGY, 30);
+  await sleep(800);
+  await cap_(p, 'The encoder emits <b>256</b>, the head expects <b>128</b> — flagged red, <b>before you run.</b>');
+  await sleep(3000);
+  await replace_(p, 'nn.Linear(128, 10)', 'nn.Linear(256, 10)');
+  await sleep(500);
+  await cap_(p, 'Fix the dim → clears instantly. No execution, no stack trace.');
+  await sleep(3000);
+}
+
+async function sceneShapes(p) {
+  await mode_(p, 'trace');
+  await cap_(p, 'Build a model — watch the real tensor shapes appear.');
+  await sleep(800);
+  await set_(p, mlp(32));
+  await sleep(2200);
+  await cap_(p, 'Widen the hidden layer 32 → 128 — shapes update live.');
+  await replace_(p, '16, 32', '16, 128');
+  await replace_(p, '32, 4', '128, 4');
+  await sleep(2600);
+}
+
+async function sceneDiff(p) {
+  await mode_(p, 'trace');
+  await cap_(p, 'Trace a baseline model…');
+  await sleep(800);
+  await set_(p, DIFF_V1);
+  await sleep(2200);
+  await mode_(p, 'diff');
+  await cap_(p, 'Widen a layer + insert a block, re-trace → <b>green = added, amber = changed.</b>');
+  await set_(p, DIFF_V2);
+  await sleep(3200);
+}
+
+async function sceneProfile(p) {
+  await mode_(p, 'trace', true);
+  await cap_(p, 'Trace with profiling on — one layer is far heavier than the rest.');
+  await sleep(800);
+  await set_(p, FAT);
+  await sleep(2400);
+  await cap_(p, 'Color nodes by cost → the fat layer glows red.');
+  const fr = await graphFrame(p);
+  if (fr) {
+    await fr.evaluate(() => {
+      const s = document.getElementById('cost-by');
+      if (s) { s.value = 'param_bytes'; }
+      if (typeof window.applyCost === 'function') window.applyCost('param_bytes');
+    });
+  }
+  await sleep(3200);
+}
+
+const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile };
+
+(async () => {
+  const run = SCENES[scene];
+  if (!run) { console.error('unknown scene ' + scene); process.exit(2); }
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext({
+    viewport: { width: 1280, height: 720 },
+    recordVideo: { dir: OUT, size: { width: 1280, height: 720 } },
+    deviceScaleFactor: 2,
+  });
+  const page = await ctx.newPage();
+  await page.goto(URL);
+  await page.waitForFunction(() => window.nsReady === true, { timeout: 10000 });
+  await page.evaluate(() => window.nsReset && window.nsReset());
+  await sleep(500);
+  await run(page);
+  await sleep(700);
+  const vid = page.video();
+  await ctx.close();
+  await browser.close();
+  const out = await vid.path();
+  console.log('VIDEO ' + out);
+})();

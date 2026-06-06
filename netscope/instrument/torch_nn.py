@@ -21,12 +21,13 @@ from __future__ import annotations
 
 import inspect
 import os
+import time
 import weakref
 from typing import Iterator, Optional
 
 from netscope.core import context as ctx
 from netscope.core import registry
-from netscope.enrich.params import own_params
+from netscope.enrich.params import own_param_bytes, own_params
 
 
 def _root_qualname_locs(root) -> dict:
@@ -86,6 +87,18 @@ def _device(x) -> Optional[str]:
         return None
     try:
         return str(x.device)
+    except Exception:
+        return None
+
+
+def _act_bytes(x) -> Optional[int]:
+    """Activation memory of a tensor = elements × bytes-per-element. Free: the
+    output tensor is already in hand in the post-hook, so this is exact and adds
+    no overhead (no extra allocation, just two cheap property reads)."""
+    if not _is_tensor(x):
+        return None
+    try:
+        return int(x.numel() * x.element_size())
     except Exception:
         return None
 
@@ -194,6 +207,7 @@ class TorchForwardInstrumentor:
         )
 
         pending: list = []      # stack of SpanHandle (sync, nested execution)
+        starts: list = []       # parallel stack of perf_counter() starts (profile)
         producers: dict = {}    # id(tensor) -> (node_id, weakref(tensor))
         id2name: dict = {}      # id(submodule) -> qualified name, per top-level fwd
         qual2loc: dict = {}     # qualname -> {file, line}, per top-level fwd
@@ -231,6 +245,9 @@ class TorchForwardInstrumentor:
                         extra.append(_attach_isolation_capture(cap, target, isolate_target))
             qualname = id2name.get(id(module))
             meta = {"params": own_params(module)}
+            pbytes = own_param_bytes(module)
+            if pbytes:
+                meta["param_bytes"] = pbytes   # free: count × dtype size, for the memory overlay
             in_t = _first_tensor(args)
             in_shape = _shape(in_t)
             if in_shape is not None:
@@ -254,6 +271,10 @@ class TorchForwardInstrumentor:
                 loc = qual2loc.get(qualname)
             handle = cap.open_span(type(module).__name__, kind="module", meta=meta, loc=loc)
             pending.append(handle)
+            # timing (opt-in): push a start NOW, last thing before forward runs, so
+            # the paired post-hook measures (this module + its children) wall-time.
+            # Kept in lockstep with `pending` (pushed/popped on the same paths).
+            starts.append(time.perf_counter() if getattr(cap, "profile", False) else None)
             # dataflow: link the producer of each input tensor -> this module,
             # but only if the recorded weakref still points to the SAME tensor
             # (guards against id() reuse after an intermediate tensor is freed).
@@ -269,10 +290,12 @@ class TorchForwardInstrumentor:
                     )
 
         def post(module, args, output):
+            elapsed_end = time.perf_counter()   # grab first, before our own bookkeeping
             cap = ctx.active_capture()
             if cap is None or not pending:
                 return
             handle = pending.pop()
+            t0 = starts.pop() if starts else None
             # out_shape from the output if it's a bare tensor; for a tuple/dict
             # output (MultiheadAttention, HF ModelOutput) fall back to the first
             # reachable tensor so the node still shows a representative shape.
@@ -281,6 +304,11 @@ class TorchForwardInstrumentor:
             update = {}
             if out_shape is not None:
                 update["out_shape"] = out_shape
+            ab = _act_bytes(out_t)
+            if ab is not None:
+                update["act_bytes"] = ab           # free: output activation memory
+            if t0 is not None:
+                update["time_ms"] = round((elapsed_end - t0) * 1000, 4)
             # fill dtype/device from the output if the input didn't provide them.
             n = cap.graph.get_node(handle.node_id)
             cur_meta = n.get("meta") or {}

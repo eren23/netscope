@@ -7,12 +7,31 @@ PyTorch / Hugging Face pipeline — real per-layer tensor shapes, the actual
 dataflow, repeated blocks folded into one, and **shape mismatches flagged in
 red** before they blow up at runtime. No decorators, ~zero overhead, no CDN.
 
+![catch a shape mismatch as you type](docs/video/bug.gif)
+
+> *Wire an encoder's 256-dim output into a head that expects 128 — netscope flags
+> it red **as you type**, before you ever run.* &nbsp;([more clips ↓](#see-it-live))
+
 > Working name. The hero demo is [sfumato](https://github.com/eren23/sfumato) —
 > a hybrid AR (Qwen) + diffusion (LLaDA) reasoning pipeline.
 
 ![sfumato cmajc pipeline](docs/img/sfumato.png)
 
 ---
+
+## See it live
+
+Recorded live in the editor — every keystroke re-analyzed, the graph updated as
+you work. **Try it yourself:** `python -m netscope.playground` opens this split
+view in your browser (paste a model, watch it analyzed — trace / static / profile
+/ diff modes).
+
+|  |  |
+|:--|:--|
+| **Build a model — real shapes appear** | **Diff two versions** — 🟢 added · 🟡 changed |
+| ![shapes as you write](docs/video/shapes.gif) | ![diff two model versions](docs/video/diff.gif) |
+| **Profile by cost** — the fat layer glows red | **▶ [40-second full tour](docs/video/netscope-reel.mp4)** |
+| ![profile cost heatmap](docs/video/profile.gif) | the same loop, end to end |
 
 ## Why
 
@@ -62,6 +81,15 @@ is kept, never tensors.
   running it* (a `torch.fx` fallback recovers real structure for traceable models).
 - **Isolate a part** — re-run just one submodule on its real input, alone.
 - **Click-to-source** — every node carries `file:line`.
+- **Trace diffing** — `netscope.diff(before, after)`: edit a model, re-trace, and
+  see exactly what changed — nodes added (green) / removed, plus shape + param
+  deltas on the ones that stayed. Keyed by qualname, so it survives a layer insert.
+- **Per-layer cost** — activation + param **memory** on every node (free, derived
+  from shapes); `netscope.graph(profile=True)` adds wall-**time**. A cost heatmap
+  recolors nodes so the fat/slow layer pops.
+- **Role lens** — color a model by architectural role (attention / MLP / norm /
+  embedding) so a transformer's structure reads at a glance; `netscope.roles(g)`
+  returns the breakdown.
 
 …and three optional, key-gated layers on top (all work offline without them):
 
@@ -96,6 +124,9 @@ python examples/static_dim_check_demo.py # a wiring clash caught WITHOUT running
 python examples/isolate_demo.py         # re-run just resnet's layer2, alone
 python examples/mcp_server_demo.py      # the MCP tools an agent would call
 python examples/views_demo.py           # a prompt -> a graph re-styling spec
+python examples/diff_demo.py            # two model versions -> a colored diff
+python examples/profile_demo.py         # per-layer cost -> a heatmap
+python examples/roles_demo.py           # color a transformer by attention/MLP/norm
 ```
 
 ## Optional hints
@@ -124,6 +155,10 @@ by source location), with click-a-node → jump-to-line. After a trace you also 
 - a node panel with **isolate this block**, the **LLM assistant**
   (`explain` / `why flagged` / `suggest fix`), and a **view:** box that turns a
   prompt into a graph re-styling;
+- **Run & Trace (Profiled)** — captures per-layer wall-time; the graph's `cost:`
+  selector then recolors nodes by time / memory / params (the fat layer glows red);
+- **Diff with Last Trace** — edit your model, trace again, and this paints what
+  changed (green = added, amber = changed) with shape/param deltas in the panel;
 - non-blocking, cancellable runs (a big model won't freeze the editor).
 
 ```bash
@@ -213,7 +248,7 @@ and inside locked-down webviews.
 ```bash
 python3 -m venv .venv --system-site-packages
 .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest tests/          # 154 passed, 1 skipped (FLOPs: thop optional)
+.venv/bin/python -m pytest tests/          # 172 passed, 1 skipped (FLOPs: thop optional)
 cd extension && npm run test:unit && npm run test:headless
 ```
 

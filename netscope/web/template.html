@@ -122,6 +122,11 @@
     transition:all .14s; }
   .vinput::placeholder { color:var(--ink-dim); text-transform:none; letter-spacing:0; }
   .vinput:focus { border-color:var(--stage); background:rgba(34,211,238,0.06); width:240px; }
+  .vselect { font-family:var(--mono); font-size:10px; color:var(--ink);
+    background:rgba(255,255,255,0.04); border:1px solid var(--hair); border-radius:7px;
+    padding:5px 7px; outline:none; cursor:pointer; transition:all .14s; }
+  .vselect:focus, .vselect:hover { border-color:var(--stage); }
+  .hbtn.on { border-color:var(--stage); color:var(--stage); }
   #hud .live { margin-left:0; }
 </style>
 </head>
@@ -138,6 +143,13 @@
     <button class="hbtn" id="btn-collapse">⊖ collapse all</button>
     <input class="vinput" id="view-input" type="text" placeholder="view: e.g. highlight attention" />
     <button class="hbtn" id="btn-view-clear" title="clear view">✕</button>
+    <select class="vselect" id="cost-by" title="color nodes by cost">
+      <option value="">cost: off</option>
+      <option value="time_ms">cost: time</option>
+      <option value="act_bytes">cost: memory</option>
+      <option value="param_bytes">cost: params</option>
+    </select>
+    <button class="hbtn" id="btn-role" title="color nodes by architectural role (attention/MLP/norm/…)">⊕ role</button>
   </span>
   <span class="warnpill" id="warnpill" title="shape mismatches">⚠ <span id="warncount">0</span></span>
   <span class="live"><span class="dot"></span> tracing</span>
@@ -240,6 +252,36 @@ const cy = cytoscape({
     { selector: 'edge[flow = "inferred"]', style: {
         "line-style": "dashed", "line-dash-pattern": [5, 6], "opacity": 0.6,
         "width": 1.6, "target-arrow-shape": "vee" } },
+
+    // --- trace diff (annotate_diff): added=green, changed=amber, removed=ghost.
+    // So the effect of an edit reads at a glance — what's new, what shifted, what
+    // disappeared. `same` nodes are left default so the changes are what pop.
+    { selector: 'node[diff = "added"]', style: {
+        "border-color": "#34d399", "border-width": 3, "border-opacity": 1,
+        "underlay-color": "#34d399", "underlay-opacity": 0.42, "underlay-padding": 12,
+        "z-index": 90 } },
+    { selector: 'node[diff = "changed"]', style: {
+        "border-color": "#fbbf24", "border-width": 3, "border-opacity": 1,
+        "underlay-color": "#fbbf24", "underlay-opacity": 0.4, "underlay-padding": 12,
+        "color": "#fff7e0", "z-index": 90 } },
+    { selector: 'node[diff = "removed"]', style: {
+        "border-style": "dashed", "border-color": "#9aa0b4", "border-width": 1.6,
+        "background-opacity": 0.22, "opacity": 0.4, "color": "#9aa0b4" } },
+
+    // --- profiler cost heatmap: nodes recolored cool→hot by a chosen metric
+    // (time / activation memory / params), normalized to the max. The heaviest
+    // layer glows red — the slow/fat one pops without reading numbers.
+    { selector: "node[costcolor]", style: {
+        "border-color": "data(costcolor)", "border-width": 3.2, "border-opacity": 1,
+        "underlay-color": "data(costcolor)", "underlay-opacity": 0.5, "underlay-padding": 12,
+        "z-index": 88 } },
+
+    // --- transformer role lens: color a model by architectural component, so its
+    // attention / MLP / norm structure reads at a glance (the LLM-pipeline view).
+    { selector: "node[rolecolor]", style: {
+        "border-color": "data(rolecolor)", "border-width": 3, "border-opacity": 1,
+        "underlay-color": "data(rolecolor)", "underlay-opacity": 0.45, "underlay-padding": 11,
+        "z-index": 87 } },
 
     { selector: "node.hi", style: {
         "underlay-opacity": 0.5, "underlay-padding": 12, "border-width": 2.2, "z-index": 99 } },
@@ -404,6 +446,22 @@ if (_vin && vscode){
 const _vclr = document.getElementById("btn-view-clear");
 if (_vclr) _vclr.onclick = ()=>{ clearView(); if(_vin) _vin.value=""; };
 
+// ---- profiler cost heatmap: color leaf nodes cool->hot by a metric, vs the max.
+function _heat(t){ t=Math.max(0,Math.min(1,t));
+  const lo=t<0.5?[52,211,153]:[251,191,36], hi=t<0.5?[251,191,36]:[239,68,68], k=t<0.5?t*2:(t-0.5)*2;
+  const c=lo.map((v,i)=>Math.round(v+(hi[i]-v)*k)); return "rgb("+c[0]+","+c[1]+","+c[2]+")"; }
+function clearCost(){ cy.nodes().forEach(n=> n.removeData("costcolor costval")); }
+function applyCost(field){
+  clearCost(); if(typeof clearRole==="function") clearRole(); if(!field) return;
+  let max=0; const vals=new Map();
+  cy.nodes().forEach(n=>{ if(n.isParent()) return; const v=(n.data("meta")||{})[field];
+    if(typeof v==="number" && v>0){ vals.set(n.id(),v); if(v>max) max=v; } });
+  if(max<=0) return;
+  vals.forEach((v,id)=>{ const n=cy.getElementById(id); n.data("costcolor",_heat(v/max)); n.data("costval",v); });
+}
+const _costsel = document.getElementById("cost-by");
+if (_costsel) _costsel.onchange = (e)=> applyCost(e.target.value);
+
 const _be = document.getElementById("btn-expand");
 const _bc = document.getElementById("btn-collapse");
 // Expanding a big deep model to its full node count is an unreadable smear even
@@ -521,6 +579,11 @@ function row(parent, k, v){
   const b=document.createElement("div"); b.className="v"; b.textContent=v;
   parent.appendChild(a); parent.appendChild(b);
 }
+function _humanBytes(b){
+  if(b<1024) return b+" B";
+  const u=["KB","MB","GB","TB"]; let i=-1; do{ b/=1024; i++; }while(b>=1024 && i<u.length-1);
+  return b.toFixed(b<10?1:0)+" "+u[i];
+}
 function showPanel(d){
   pbody.replaceChildren();
   const name=document.createElement("div"); name.className="pname"; name.textContent=d.name||d.id;
@@ -534,13 +597,19 @@ function showPanel(d){
   if (typeof m.params==="number") row(rows,"params", m.params.toLocaleString());
   if (m.dtype) row(rows,"dtype", m.dtype);
   if (m.device) row(rows,"device", m.device);
+  if (typeof m.time_ms==="number") row(rows,"time", m.time_ms.toFixed(2)+" ms");
+  if (typeof m.act_bytes==="number") row(rows,"activation", _humanBytes(m.act_bytes));
+  if (typeof m.param_bytes==="number") row(rows,"param mem", _humanBytes(m.param_bytes));
   if (d.prov) row(rows,"source", d.prov);
+  if (d.role && d.role !== "other") row(rows,"role", d.role);
   const a=d.attrs||{};
   if (a.inferred && typeof a.confidence==="number")
     row(rows,"inferred", "LLM guess · "+Math.round(a.confidence*100)+"% conf");
   if (a.repeat) row(rows,"repeat", "x"+a.repeat);
   if (a.branch) row(rows,"role","branch");
   if (a.reduce) row(rows,"role","reduce / vote");
+  if (d.diff && d.diff !== "same")
+    row(rows,"diff", d.diff + (d.diff_detail ? " · "+d.diff_detail : ""));
   pbody.appendChild(rows);
   if (d.loc){
     const loc=document.createElement("div"); loc.className="loc";
@@ -598,19 +667,42 @@ if (vscode){
 }
 cy.on("tap",(e)=>{ if(e.target===cy) panel.classList.remove("open"); });
 
-// ---- legend (only kinds actually present) ----------------------------------
-(function(){
-  const present=[...new Set(cy.nodes().map(n=>n.data("kind")))];
-  const order=["pipeline","stage","model","module","op"];
-  const leg=document.getElementById("legend");
-  order.filter(k=>present.includes(k)).forEach(k=>{
-    const el=document.createElement("span"); el.className="lg";
-    const sw=document.createElement("i"); sw.style.background=KIND[k];
-    sw.style.boxShadow="0 0 8px "+KIND[k]; el.appendChild(sw);
-    const t=document.createElement("span"); t.textContent=k; el.appendChild(t);
-    leg.appendChild(el);
-  });
-})();
+// ---- legend (kinds present, or roles when the role lens is on) --------------
+const ROLE_COLORS={attention:"#22d3ee",mlp:"#cf8bff",norm:"#34f5a8",embedding:"#ffc233",
+  activation:"#7fb0ff",conv:"#ff8d6b",linear:"#9aa7bd",other:"#566074"};
+function _legendChip(leg,color,text){
+  const el=document.createElement("span"); el.className="lg";
+  const sw=document.createElement("i"); sw.style.background=color; sw.style.boxShadow="0 0 8px "+color;
+  el.appendChild(sw); const t=document.createElement("span"); t.textContent=text; el.appendChild(t);
+  leg.appendChild(el);
+}
+function renderLegend(mode){
+  const leg=document.getElementById("legend"); leg.replaceChildren();
+  if(mode==="role"){
+    const present=[...new Set(cy.nodes().map(n=>n.data("role")).filter(Boolean))];
+    ["attention","mlp","norm","embedding","activation","conv","linear","other"]
+      .filter(r=>present.includes(r)).forEach(r=> _legendChip(leg,ROLE_COLORS[r],r));
+  } else {
+    const present=[...new Set(cy.nodes().map(n=>n.data("kind")))];
+    ["pipeline","stage","model","module","op"].filter(k=>present.includes(k))
+      .forEach(k=> _legendChip(leg,KIND[k],k));
+  }
+}
+renderLegend("kind");
+
+// ---- transformer role lens: color nodes by architectural role (attention/MLP/
+// norm/…) so an LLM's alternating structure reads at a glance. Toggle button.
+let roleOn=false;
+function clearRole(){ cy.nodes().forEach(n=>n.removeData("rolecolor")); roleOn=false; renderLegend("kind");
+  const b=document.getElementById("btn-role"); if(b) b.classList.remove("on"); }
+function applyRole(){
+  if(typeof clearCost==="function") clearCost();   // role + cost are exclusive lenses
+  const sel=document.getElementById("cost-by"); if(sel) sel.value="";
+  cy.nodes().forEach(n=>{ const r=n.data("role"); if(r && ROLE_COLORS[r]) n.data("rolecolor",ROLE_COLORS[r]); });
+  roleOn=true; renderLegend("role");
+}
+const _broll=document.getElementById("btn-role");
+if(_broll) _broll.onclick=()=>{ roleOn ? clearRole() : applyRole(); _broll.classList.toggle("on",roleOn); };
 
 // ---- mismatch warnings: pill + collapsible list, click to focus the edge ----
 (function(){

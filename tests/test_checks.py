@@ -86,6 +86,31 @@ def test_same_rank_different_feature_is_still_shape_mismatch():
     assert w[0]["kind"] == "shape_mismatch"
 
 
+def test_seq_len_difference_is_not_flagged():
+    # encoder->decoder cross-attention: src_len 5, tgt_len 6, SAME feature dim 32.
+    # Axis 1 is the sequence length and legitimately differs — flagging it is a
+    # false alarm (the real dogfood bug on nn.Transformer). Feature (last) matches.
+    g = _edge_graph([2, 5, 32], [2, 6, 32])
+    assert detect_mismatches(g) == []
+
+
+def test_seq_models_still_flag_feature_dim_clash():
+    # but a genuine embedding-dim clash on a 3-D tensor IS a real bug -> flag it,
+    # regardless of the sequence axis also differing.
+    g = _edge_graph([2, 5, 32], [2, 6, 64])
+    w = detect_mismatches(g)
+    assert len(w) == 1
+    assert w[0]["kind"] == "shape_mismatch"
+    assert "32" in w[0]["detail"] and "64" in w[0]["detail"]
+
+
+def test_conv_spatial_difference_is_not_flagged():
+    # NCHW with matching channels (64) but different spatial size (56->28, a
+    # stride-2/pool downsample) is normal — only the channel axis matters for conv.
+    g = _edge_graph([1, 64, 56, 56], [1, 64, 28, 28])
+    assert detect_mismatches(g) == []
+
+
 def test_capture_attaches_warnings_to_graph_dict():
     import netscope
 

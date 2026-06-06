@@ -15,6 +15,17 @@ def own_params(module) -> int:
         return 0
 
 
+def own_param_bytes(module) -> int:
+    """Bytes of a module's directly-owned parameters (count × dtype size), so a
+    half-precision layer reads as half the memory of its float32 twin. recurse=
+    False for the same no-double-count reason as `own_params`."""
+    try:
+        return int(sum(p.numel() * p.element_size()
+                       for p in module.parameters(recurse=False)))
+    except Exception:
+        return 0
+
+
 def total_params(module) -> int:
     try:
         return int(sum(p.numel() for p in module.parameters()))

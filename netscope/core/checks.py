@@ -28,6 +28,20 @@ def _label(node) -> str:
     return q or node["name"]
 
 
+def _feature_axis(rank: int) -> int:
+    """The axis carrying the channel/feature dim, by PyTorch layout convention.
+
+    4-D NCHW → channels live at axis 1 (H/W are spatial, change freely under
+    stride/pool). Everything else (2-D NC, 3-D NSC) → the LAST axis is the
+    feature/embedding dim; axis 1 of a 3-D tensor is the SEQUENCE length, which
+    legitimately differs across a cross-attention edge. Returning the right axis
+    is what keeps us from flagging seq-length / spatial changes as wiring bugs.
+    """
+    if rank == 4:
+        return 1
+    return rank - 1
+
+
 def _check_edge(a, b, src, dst) -> Optional[dict]:
     a_shape = _shape((a.get("meta") or {}).get("out_shape"))
     b_shape = _shape((b.get("meta") or {}).get("in_shape"))
@@ -49,20 +63,18 @@ def _check_edge(a, b, src, dst) -> Optional[dict]:
             ),
         }
 
-    # 2) same rank, differing NON-BATCH dims (everything after axis 0). This
-    #    catches a Linear in!=out (1-D feature) AND a Conv channel clash (the
-    #    differing axis isn't always the last one). Batch (axis 0) is ignored.
-    a_feat, b_feat = a_shape[1:], b_shape[1:]
-    if a_feat != b_feat:
-        # report the single differing dim if there's exactly one, else the shapes
-        diffs = [i for i in range(len(a_feat)) if a_feat[i] != b_feat[i]]
-        if len(diffs) == 1:
-            i = diffs[0]
-            detail = (f"{a_name} emits dim {a_feat[i]} but "
-                      f"{b_name} expects {b_feat[i]} (axis {i + 1})")
-        else:
-            detail = (f"{a_name} emits non-batch shape {a_feat} but "
-                      f"{b_name} expects {b_feat}")
+    # 2) same rank: compare ONLY the feature/channel axis (see _feature_axis).
+    #    A clash there — Linear in!=out, a transformer embed-dim mismatch, a Conv
+    #    channel clash — is a real wiring bug. Differences confined to non-feature
+    #    axes (sequence length on a 3-D tensor, spatial H/W on a 4-D one) are
+    #    intentional reshaping, NOT bugs, so we stay silent (the "no false alarms"
+    #    rule; flagging encoder src_len vs decoder tgt_len was the dogfood bug).
+    if len(a_shape) < 2:
+        return None   # rank-1: no batch/feature split to reason about
+    fa = _feature_axis(len(a_shape))
+    if a_shape[fa] != b_shape[fa]:
+        detail = (f"{a_name} emits dim {a_shape[fa]} but "
+                  f"{b_name} expects {b_shape[fa]} (axis {fa})")
         return {**base, "kind": "shape_mismatch", "detail": detail}
     return None
 

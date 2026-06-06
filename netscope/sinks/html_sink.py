@@ -12,6 +12,8 @@ import json
 import os
 import tempfile
 
+from netscope.enrich.roles import node_role
+
 _WEB = os.path.join(os.path.dirname(__file__), os.pardir, "web")
 _TEMPLATE = os.path.join(_WEB, "template.html")
 _VENDOR = os.path.join(_WEB, "vendor")
@@ -74,8 +76,15 @@ def to_cytoscape(g) -> dict:
         }
         if n["id"] in warn_nodes:
             data["warn"] = True
+        data["role"] = node_role(n)       # attention | mlp | norm | … (transformer lens)
         if (n.get("attrs") or {}).get("inferred"):
             data["inferred"] = True       # LLM-inferred -> rendered dashed/dim
+        _diff = (n.get("attrs") or {}).get("diff")
+        if _diff:
+            data["diff"] = _diff          # added | removed | changed | same
+            _dd = (n.get("attrs") or {}).get("diff_detail")
+            if _dd:
+                data["diff_detail"] = _dd
         if n.get("parent"):
             data["parent"] = n["parent"]
         nodes.append({"data": data})

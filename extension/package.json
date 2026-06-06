@@ -29,6 +29,16 @@
         "category": "netscope"
       },
       {
+        "command": "netscope.runAndTraceProfiled",
+        "title": "netscope: Run & Trace (Profiled — per-layer cost)",
+        "category": "netscope"
+      },
+      {
+        "command": "netscope.diffWithLast",
+        "title": "netscope: Diff with Last Trace",
+        "category": "netscope"
+      },
+      {
         "command": "netscope.setLlmKey",
         "title": "netscope: Set LLM API Key",
         "category": "netscope"
@@ -69,6 +79,11 @@
           "command": "netscope.showGraph",
           "when": "editorLangId == python",
           "group": "netscope@2"
+        },
+        {
+          "command": "netscope.diffWithLast",
+          "when": "editorLangId == python",
+          "group": "netscope@3"
         }
       ]
     },

@@ -103,6 +103,27 @@ class NVGraph:
             "warnings": detect_mismatches(self),
         }
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "NVGraph":
+        """Rebuild a graph from ``to_dict()`` output (or a saved JSON trace).
+
+        Inverse of ``to_dict`` for nodes + edges; ``warnings`` aren't stored back
+        (they're recomputed on demand). Used to diff two persisted traces."""
+        g = cls(name=data.get("name", ""))
+        for n in data.get("nodes", []):
+            g.add_node(
+                n["id"], kind=n.get("kind", "module"), name=n.get("name", n["id"]),
+                parent=n.get("parent"), source=n.get("source", "runtime"),
+                loc=n.get("loc"), meta=n.get("meta"), attrs=n.get("attrs"),
+            )
+        for e in data.get("edges", []):
+            g.add_edge(
+                e["src"], e["dst"], kind=e.get("kind", "dataflow"),
+                tensor_meta=e.get("tensor_meta"), source=e.get("source", "runtime"),
+                condition=e.get("condition"),
+            )
+        return g
+
     # -- sinks (lazy imports keep core decoupled from rendering) ---------------
     def to_json(self, indent: int = 2) -> str:
         from netscope.sinks.json_sink import to_json

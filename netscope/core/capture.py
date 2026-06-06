@@ -27,9 +27,12 @@ class SpanHandle:
 
 
 class Capture:
-    def __init__(self, name: str = "") -> None:
+    def __init__(self, name: str = "", profile: bool = False) -> None:
         self.graph = NVGraph(name=name)
         self._counter = itertools.count()
+        # opt-in wall-time measurement. Read by the torch hook; off by default so
+        # the steady-state trace stays metadata-only and ~zero overhead.
+        self.profile = profile
 
     def _new_id(self, name: str) -> str:
         return f"{name}#{next(self._counter)}"
@@ -77,8 +80,13 @@ class Capture:
 
 
 @contextlib.contextmanager
-def graph(name: str = "") -> Iterator[NVGraph]:
+def graph(name: str = "", *, profile: bool = False) -> Iterator[NVGraph]:
     """Open a capture session. Yields the live NVGraph.
+
+    profile=True additionally measures per-module wall-time (`meta.time_ms`); it's
+    opt-in because timing has real overhead, whereas the default trace is
+    metadata-only. Activation/param byte counts ride on every trace regardless
+    (they're free — derived from shapes already captured).
 
     Sessions do not nest: a second `graph()` opened inside an active one would
     double-install the global torch hooks, so every module would be captured
@@ -93,7 +101,11 @@ def graph(name: str = "") -> Iterator[NVGraph]:
             "Close the outer `with netscope.graph(...)` first, or use a single "
             "session."
         )
-    cap = Capture(name)
+    # NETSCOPE_PROFILE=1 forces profiling on without editing the user's graph()
+    # call — this is how the extension's "Run & Trace (profiled)" turns it on.
+    if not profile and os.environ.get("NETSCOPE_PROFILE"):
+        profile = True
+    cap = Capture(name, profile=profile)
     token = ctx.set_capture(cap)
     stack_token = ctx.push_clean_parent_scope()   # fresh stack; restored on exit
     handles = registry.enter_session()
