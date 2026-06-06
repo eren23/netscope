@@ -727,7 +727,8 @@ if(_broll) _broll.onclick=()=>{ roleOn ? clearRole() : applyRole(); _broll.class
     it.className = "witem";
     it.textContent = "⚠ " + w.detail;           // textContent: detail is semi-trusted
     it.onclick = ()=>{
-      const e = cy.getElementById(w.src + "->" + w.dst);
+      // edges have id `e${i}`, so match the clash edge by its endpoints, not a
+      // src->dst id (that lookup never resolved — dead code, removed).
       const ep = cy.edges().filter((x)=> x.data("source")===w.src && x.data("target")===w.dst);
       const focus = ep.nonempty() ? ep.union(ep.connectedNodes()) : cy.getElementById(w.dst);
       if (focus.nonempty()) cy.animate({ fit: { eles: focus, padding: 80 } }, { duration: 250 });

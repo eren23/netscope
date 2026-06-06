@@ -29,27 +29,31 @@ function nodeRole(n: any): string {
   return "other";
 }
 
-export function toElements(g: NVGraph): { nodes: any[]; edges: any[] } {
-  // nodes/edges touched by a mismatch warning -> data.warn, so the renderer can
-  // paint them red AND the node panel can offer a "why flagged?" assistant action.
+export function toElements(g: NVGraph): { nodes: any[]; edges: any[]; warnings: any[] } {
+  // nodes/edges touched by a mismatch warning -> data.warn, so the renderer paints
+  // them red; the top-level `warnings` array drives the HUD ⚠ pill + warn list.
+  const warns = g.warnings || [];
   const warnIds = new Set<string>();
-  for (const w of (g as unknown as { warnings?: { src: string; dst: string }[] }).warnings || []) {
+  const warnPairs = new Set<string>();
+  for (const w of warns) {
     warnIds.add(w.src);
     warnIds.add(w.dst);
+    warnPairs.add(`${w.src}->${w.dst}`);
   }
 
   const nodes = g.nodes.map((n) => {
     const data: any = {
       id: n.id, name: n.name, label: label(n), kind: n.kind,
-      meta: n.meta || {}, loc: n.loc,
+      meta: n.meta || {}, loc: n.loc, prov: n.source,   // prov = the panel's "source" row
     };
     if (n.parent) data.parent = n.parent;
     if (warnIds.has(n.id)) data.warn = true;
     data.role = nodeRole(n);              // transformer "color by role" lens
 
+    const attrs = n.attrs || {};
+    if (attrs.inferred) data.inferred = true;   // LLM-inferred -> dashed/dim styling
     // trace-diff tags (added|removed|changed|same) drive the green/amber styling;
     // the cost overlay reads meta.* directly, so it needs nothing extra here.
-    const attrs = (n as unknown as { attrs?: Record<string, unknown> }).attrs || {};
     if (attrs.diff) {
       data.diff = attrs.diff;
       if (attrs.diff_detail) data.diff_detail = attrs.diff_detail;
@@ -61,10 +65,11 @@ export function toElements(g: NVGraph): { nodes: any[]; edges: any[] } {
   g.edges.forEach((e, i) => {
     if (e.kind === "contains") return; // implied by compound nesting
     const data: any = { id: `e${i}`, source: e.src, target: e.dst, kind: e.kind };
+    if (warnPairs.has(`${e.src}->${e.dst}`)) data.warn = true;   // paint the clash edge red
     const shape = e.tensor_meta && e.tensor_meta.shape;
     if (shape && shape.length) data.label = shape.join("x");
     edges.push({ data });
   });
 
-  return { nodes, edges };
+  return { nodes, edges, warnings: warns };
 }

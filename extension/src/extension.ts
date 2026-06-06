@@ -148,14 +148,18 @@ async function runAndTrace(file: string, extraEnv?: NodeJS.ProcessEnv): Promise<
 // chosen submodule on its real input and dumps that focused sub-trace.
 async function runIsolate(file: string, qualname: string): Promise<NVGraph | null> {
   const outPath = path.join(os.tmpdir(), `netscope-iso-${process.pid}-${Date.now()}.json`);
-  await execAsync([file], {
+  const r = await execAsync([file], {
     title: `netscope: isolating ${qualname}…`,
     env: { ...process.env, NETSCOPE_ISOLATE: qualname, NETSCOPE_ISOLATE_OUT: outPath },
   });
   if (!fs.existsSync(outPath)) {
+    // a real run failure (bad interpreter, import error, exception) gets the
+    // actionable message; only a clean exit-with-no-output is "wasn't reached".
     vscode.window.showWarningMessage(
-      `netscope: couldn't isolate "${qualname}" — the module wasn't reached, or it ` +
-      `needs call args that couldn't be re-run standalone.`
+      r.code !== 0
+        ? explainFailure(r)
+        : `netscope: couldn't isolate "${qualname}" — the module wasn't reached, or it ` +
+          `needs call args that couldn't be re-run standalone.`
     );
     return null;
   }

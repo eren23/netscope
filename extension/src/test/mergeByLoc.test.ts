@@ -67,4 +67,23 @@ check("render maps parent->compound and drops contains edges", () => {
   assert.strictEqual(el.edges[0].data.kind, "dataflow");
 });
 
+check("render surfaces warnings, edge-warn, prov and inferred", () => {
+  const gr: NVGraph = {
+    schema_version: "1", name: "w",
+    nodes: [
+      node({ id: "a", name: "Enc", source: "runtime", meta: { out_shape: [1, 256] }, attrs: { inferred: true } }),
+      node({ id: "b", name: "Head", source: "static", meta: { in_shape: [1, 128] } }),
+    ],
+    edges: [{ src: "a", dst: "b", kind: "dataflow", source: "runtime" }],
+    warnings: [{ src: "a", dst: "b", detail: "Enc emits 256 but Head expects 128" }],
+  };
+  const el = toElements(gr);
+  assert.strictEqual((el as any).warnings.length, 1);  // HUD pill + warn list need this
+  assert.strictEqual(el.edges[0].data.warn, true);     // clash edge painted red
+  const a = el.nodes.find((n: any) => n.data.id === "a")!;
+  assert.strictEqual(a.data.warn, true);
+  assert.strictEqual(a.data.prov, "runtime");          // panel "source" row
+  assert.strictEqual(a.data.inferred, true);           // dashed/dim LLM-guess styling
+});
+
 console.log(`\n${passed} passed`);
