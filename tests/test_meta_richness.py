@@ -83,14 +83,19 @@ def test_dataflow_through_dict_output():
 
 def test_dataflow_real_hf_model_has_edges():
     """A real HF decoder returns a ModelOutput (dict-like) at the top; internal
-    blocks must still be connected by dataflow edges."""
-    try:
-        from transformers import AutoConfig, AutoModelForCausalLM
-    except Exception:
-        import pytest
-        pytest.skip("transformers not available")
-    cfg = AutoConfig.from_pretrained("Qwen/Qwen3-0.6B")
-    cfg.num_hidden_layers = 2
+    blocks must still be connected by dataflow edges.
+
+    Built from a tiny LOCAL config so the test is hermetic — no Hub download /
+    network. (The previous `AutoConfig.from_pretrained("Qwen/Qwen3-0.6B")` fetch
+    flaked in CI under the parallel matrix: HTTP 429 rate-limit.) GPT2 is a
+    long-standing HF decoder returning a ModelOutput, so it exercises the same
+    dict-output dataflow path the Qwen model did."""
+    import pytest
+
+    pytest.importorskip("transformers")
+    from transformers import AutoModelForCausalLM, GPT2Config
+
+    cfg = GPT2Config(n_layer=2, n_head=2, n_embd=32, vocab_size=128, n_positions=64)
     model = AutoModelForCausalLM.from_config(cfg).train(False)
     with netscope.graph("hf") as g, torch.no_grad():
         model(torch.randint(0, cfg.vocab_size, (1, 8)))
