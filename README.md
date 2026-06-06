@@ -100,6 +100,9 @@ is kept, never tensors.
 - **Role lens** — color a model by architectural role (attention / MLP / norm /
   embedding) so a transformer's structure reads at a glance; `netscope.roles(g)`
   returns the breakdown.
+- **Generation timeline** — wrap decode steps in `netscope.step()`;
+  `netscope.timeline(g)` returns the per-step sequence-growth + latency, and the
+  steps render as a left-to-right timeline you can color by per-step time.
 
 …plus three optional layers on top — the in-editor experience needs **no key**;
 the LLM features are bring-your-own-key; everything works offline without them:
@@ -149,6 +152,7 @@ python examples/views_demo.py           # a prompt -> a graph re-styling spec
 python examples/diff_demo.py            # two model versions -> a colored diff
 python examples/profile_demo.py         # per-layer cost -> a heatmap
 python examples/roles_demo.py           # color a transformer by attention/MLP/norm
+python examples/generation_timeline_demo.py  # an autoregressive loop, step by step
 ```
 
 ## Optional hints
@@ -164,6 +168,9 @@ for b in range(5):
         cand = refiner(plan)
 with netscope.reduce("vote"):    winner = majority(cands)
 ```
+
+For autoregressive generation, wrap each decode step in `with netscope.step():` —
+the steps become the **generation timeline** (`netscope.timeline(g)`).
 
 ## VSCode / Cursor extension
 

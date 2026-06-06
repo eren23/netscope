@@ -453,8 +453,11 @@ function _heat(t){ t=Math.max(0,Math.min(1,t));
 function clearCost(){ cy.nodes().forEach(n=> n.removeData("costcolor costval")); }
 function applyCost(field){
   clearCost(); if(typeof clearRole==="function") clearRole(); if(!field) return;
+  // leaf modules, plus stage nodes (generation steps carry their own time_ms) —
+  // so the cost overlay also paints a generation timeline by per-step latency.
   let max=0; const vals=new Map();
-  cy.nodes().forEach(n=>{ if(n.isParent()) return; const v=(n.data("meta")||{})[field];
+  cy.nodes().forEach(n=>{ if(n.isParent() && n.data("kind")!=="stage") return;
+    const v=(n.data("meta")||{})[field];
     if(typeof v==="number" && v>0){ vals.set(n.id(),v); if(v>max) max=v; } });
   if(max<=0) return;
   vals.forEach((v,id)=>{ const n=cy.getElementById(id); n.data("costcolor",_heat(v/max)); n.data("costval",v); });
@@ -608,6 +611,7 @@ function showPanel(d){
   if (a.repeat) row(rows,"repeat", "x"+a.repeat);
   if (a.branch) row(rows,"role","branch");
   if (a.reduce) row(rows,"role","reduce / vote");
+  if (a.step !== undefined) row(rows,"gen step","#"+a.step);
   if (d.diff && d.diff !== "same")
     row(rows,"diff", d.diff + (d.diff_detail ? " · "+d.diff_detail : ""));
   pbody.appendChild(rows);

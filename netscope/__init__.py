@@ -16,7 +16,8 @@ from netscope.core.context import active_capture, is_capturing
 from netscope.core.diff import annotate_diff as _annotate_diff
 from netscope.core.diff import diff_graphs as _diff_graphs
 from netscope.core.ir import SCHEMA_VERSION, NVGraph
-from netscope.hints.api import branch, reduce, stage
+from netscope.core.timeline import timeline
+from netscope.hints.api import branch, reduce, stage, step
 
 _installed = False
 
@@ -86,9 +87,11 @@ __all__ = [
     "stage",
     "branch",
     "reduce",
+    "step",
     "diff",
     "diff_view",
     "roles",
+    "timeline",
     "NVGraph",
     "Capture",
     "SCHEMA_VERSION",

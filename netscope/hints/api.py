@@ -8,11 +8,23 @@ when no capture session is open (zero overhead in production).
 """
 from __future__ import annotations
 
+import contextlib
 import functools
 import inspect
+import time
 from typing import Optional
 
 from netscope.core import context as ctx
+
+
+def _now_if_profiling(cap):
+    """A start timestamp when the session is profiling, else None (zero overhead)."""
+    return time.perf_counter() if getattr(cap, "profile", False) else None
+
+
+def _stamp_time(cap, node_id, t0):
+    if t0 is not None:
+        cap.graph.update_meta(node_id, {"time_ms": round((time.perf_counter() - t0) * 1000, 4)})
 
 
 class _Marker:
@@ -22,6 +34,7 @@ class _Marker:
         self._attrs = attrs
         self._loc = loc
         self._handle = None
+        self._t0 = None
 
     # context-manager use: `with nv.stage("vote", reduce=True): ...`
     def __enter__(self):
@@ -30,13 +43,16 @@ class _Marker:
             self._handle = cap.open_span(
                 self._name, kind=self._kind, attrs=self._attrs, loc=self._loc
             )
+            self._t0 = _now_if_profiling(cap)   # per-region wall-time under profile
         return self
 
     def __exit__(self, *exc):
         cap = ctx.active_capture()
         if cap is not None and self._handle is not None:
+            _stamp_time(cap, self._handle.node_id, self._t0)
             cap.close_span(self._handle)
         self._handle = None
+        self._t0 = None
         return False
 
     # decorator use: `@nv.stage("plan")` — captures the def's loc once.
@@ -49,9 +65,11 @@ class _Marker:
             if cap is None:
                 return fn(*args, **kwargs)
             handle = cap.open_span(self._name, kind=self._kind, attrs=self._attrs, loc=loc)
+            t0 = _now_if_profiling(cap)
             try:
                 return fn(*args, **kwargs)
             finally:
+                _stamp_time(cap, handle.node_id, t0)
                 cap.close_span(handle)
 
         return wrapper
@@ -80,3 +98,24 @@ def branch(name: str, **attrs) -> _Marker:
 def reduce(name: str, **attrs) -> _Marker:
     attrs["reduce"] = True
     return _Marker(name, kind="stage", attrs=attrs)
+
+
+@contextlib.contextmanager
+def step(label: Optional[str] = None):
+    """Mark one generation / decode step — wrap each iteration of an autoregressive
+    loop (`with netscope.step(): logits = model(ids)`). Auto-numbered (step 0, 1,
+    …) and timed under ``profile=True``; together the steps form the generation
+    timeline (see ``netscope.timeline``). A no-op outside a capture session.
+    """
+    cap = ctx.active_capture()
+    if cap is None:
+        yield None
+        return
+    idx = sum(1 for n in cap.graph.nodes() if "step" in (n.get("attrs") or {}))
+    handle = cap.open_span(label or f"step {idx}", kind="stage", attrs={"step": idx})
+    t0 = _now_if_profiling(cap)
+    try:
+        yield handle.node_id
+    finally:
+        _stamp_time(cap, handle.node_id, t0)
+        cap.close_span(handle)
