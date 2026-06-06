@@ -108,6 +108,31 @@ async function sceneProfile(p) {
   await sleep(3200);
 }
 
+const PG_MODEL = `import torch, torch.nn as nn\n\nmodel = nn.Sequential(\n    nn.Linear(64, 128),\n    nn.ReLU(),\n    nn.Linear(128, 10),\n)\nx = torch.randn(8, 64)\n`;
+
+async function scenePlayground(p) {
+  await mode_(p, 'trace');
+  await p.evaluate(() => window.nsSet(''));     // clear the starter model
+  await sleep(400);
+  await cap_(p, '<b>netscope playground</b> — type a model, watch it build live.');
+  await sleep(700);
+  await type_(p, PG_MODEL, 26);
+  await sleep(1900);
+  await cap_(p, 'Widen a layer — the shapes update as you edit.');
+  await replace_(p, '64, 128', '64, 512');
+  await replace_(p, '128, 10', '512, 10');
+  await sleep(2100);
+  await cap_(p, 'Flip the mode → <b>profile</b>, then color by cost.');
+  await p.selectOption('#mode-sel', 'profile');   // the playground's mode selector
+  await sleep(1500);
+  const fr = await graphFrame(p);
+  if (fr) await fr.evaluate(() => {
+    const s = document.getElementById('cost-by'); if (s) s.value = 'param_bytes';
+    if (typeof window.applyCost === 'function') window.applyCost('param_bytes');
+  });
+  await sleep(2600);
+}
+
 async function sceneRoles(p) {
   await mode_(p, 'trace');
   await cap_(p, 'A transformer — attention, norm and feed-forward, stacked.');
@@ -127,7 +152,7 @@ async function sceneRoles(p) {
   await sleep(3200);
 }
 
-const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile, roles: sceneRoles };
+const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile, roles: sceneRoles, playground: scenePlayground };
 
 (async () => {
   const run = SCENES[scene];

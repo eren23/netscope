@@ -126,6 +126,8 @@ type — `trace` / `static` / `profile` / `diff` modes. It's the clips above, li
 and local. (It runs your code to trace it — the same trust as `python yourfile.py`,
 bound to localhost.)
 
+![the netscope playground — type a model, switch modes, color by cost](docs/video/playground.gif)
+
 ## Gallery
 
 A real LLM architecture — **Qwen3** built from its Hub config (no weight
