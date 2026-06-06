@@ -336,8 +336,12 @@ function runLayout(){
   // (a) crushes a FAN of sibling compounds into one column (sfumato), and
   // (b) STACKS deeply-nested compound boxes on top of each other when a deep
   //     model is expanded (the "everything goes orange" bug on expand-all).
-  // cose is compound-aware, so use dagre only when linear AND shallow (<=2 deep).
-  if (window.cytoscapeDagre && looksLinear() && maxDepth() <= 2){
+  // cose is compound-aware, so use dagre when linear AND shallow — OR for a model
+  // we've FOLDED from many nodes down to a shallow top-level pipeline (YOLO/RT-DETR):
+  // there dagre's L->R layered layout reads far better than cose's clustered blob,
+  // even with the multi-scale fan. (Small naturally-shallow fans like sfumato keep
+  // the looksLinear gate so dagre doesn't crush them.)
+  if (window.cytoscapeDagre && maxDepth() <= 2 && (looksLinear() || TOTAL_NODES > 50)){
     try { cy.layout({ name:"dagre", rankDir:"LR", nodeSep:28, rankSep:96, edgeSep:14, ...common }).run(); ran = true; } catch(_){}
   }
   if (!ran){ cy.layout({ name:"cose", idealEdgeLength:90, nodeOverlap:24, gravity:0.3,
@@ -396,11 +400,26 @@ function outermostRepeatedCompounds(){
   return best ? cy.collection(byName[best]) : cy.collection();
 }
 
-// Collapse FIRST (deep models only), THEN lay out once — so runLayout sees the
-// folded, near-linear graph and picks dagre.
+// Fold a deep model so the DEFAULT view is a readable top-level pipeline.
+//   1) fold repeated blocks (N identical decoder layers / BasicBlocks -> one [+]),
+//   2) then, if a big NON-repeated model is still a wall of nodes (YOLO ~272,
+//      RT-DETR ~639), keep folding the deepest compounds until the visible graph
+//      hits a readable size — leaving the high-level blocks, each expandable.
+const FOLD_TARGET = 36;
+function autoFold(target){
+  if (!ecApi || !ecApi.collapsibleNodes) return;
+  for (let i = 0; i < 40 && cy.nodes(":visible").length > target; i++){
+    const coll = ecApi.collapsibleNodes();          // expanded compounds we can fold
+    if (!coll || !coll.nonempty()) break;
+    let maxd = -1; coll.forEach((n)=>{ const d = nodeDepth(n); if (d > maxd) maxd = d; });
+    try { ecApi.collapse(coll.filter((n)=> nodeDepth(n) === maxd)); }  // deepest first
+    catch (_) { break; }
+  }
+}
 if (ecApi && maxDepth() >= 3){
-  const targets = outermostRepeatedCompounds();
-  if (targets.length){ try { ecApi.collapse(targets); } catch(_){} }
+  const reps = outermostRepeatedCompounds();
+  if (reps.length){ try { ecApi.collapse(reps); } catch(_){} }
+  if (cy.nodes(":visible").length > FOLD_TARGET) autoFold(FOLD_TARGET);
 }
 runLayout();
 
