@@ -152,7 +152,59 @@ async function sceneRoles(p) {
   await sleep(3200);
 }
 
-const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile, roles: sceneRoles, playground: scenePlayground };
+const RESNET = `import torch, torchvision.models as M\n\nmodel = M.resnet18()\nx = torch.randn(1, 3, 224, 224)\n`;
+const GPT2 = `import torch\nfrom transformers import GPT2Config, GPT2Model\n\ncfg = GPT2Config(n_layer=3, n_head=6, n_embd=192, vocab_size=512)\nmodel = GPT2Model(cfg)\nx = torch.randint(0, 512, (1, 16))\n`;
+const MOBILENET = `import torch, torchvision.models as M\n\nmodel = M.mobilenet_v3_small()\nx = torch.randn(1, 3, 224, 224)\n`;
+
+async function sceneResnet(p) {
+  await mode_(p, 'trace');
+  await p.evaluate(() => window.nsSet(''));   // clear the starter model first
+  await sleep(250);
+  await cap_(p, 'A real vision model — <b>resnet18</b>, 11.7M params — in one line.');
+  await sleep(700);
+  await type_(p, RESNET, 22);
+  await sleep(3200);
+  await cap_(p, '76 layers, but the repeated BasicBlocks fold — it reads as a clean pipeline.');
+  await sleep(3200);
+}
+
+async function sceneGpt2(p) {
+  await mode_(p, 'trace');
+  await p.evaluate(() => window.nsSet(''));   // clear the starter model first
+  await sleep(250);
+  await cap_(p, '<b>GPT-2</b>, built from its config — no weights downloaded.');
+  await sleep(700);
+  await type_(p, GPT2, 20);
+  await sleep(3400);
+  await cap_(p, 'Unfold the blocks, color by <b>role</b> — attention · MLP · norm.');
+  const fr = await graphFrame(p);
+  if (fr) {
+    await fr.evaluate(() => {
+      if (!window.ecApi || !window.ecApi.expandableNodes) return;
+      // collapsed blocks aren't isParent(); they're "expandable". Unfold them to
+      // reveal the attention / MLP / norm internals, then color by role.
+      const exp = window.ecApi.expandableNodes();
+      if (exp && exp.nonempty()) window.ecApi.expand(exp);
+    });
+    await sleep(800);
+    await fr.evaluate(() => { const b = document.getElementById('btn-role'); if (b) b.click(); });
+  }
+  await sleep(3400);
+}
+
+async function sceneMobilenet(p) {
+  await mode_(p, 'trace');
+  await p.evaluate(() => window.nsSet(''));   // clear the starter model first
+  await sleep(250);
+  await cap_(p, '<b>MobileNetV3</b> — 200+ layers, traced from one forward pass.');
+  await sleep(700);
+  await type_(p, MOBILENET, 20);
+  await sleep(3600);
+  await cap_(p, 'Even a deep modern CNN folds into a graph you can actually read.');
+  await sleep(2800);
+}
+
+const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile, roles: sceneRoles, playground: scenePlayground, resnet: sceneResnet, gpt2: sceneGpt2, mobilenet: sceneMobilenet };
 
 (async () => {
   const run = SCENES[scene];

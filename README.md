@@ -33,6 +33,12 @@ view in your browser (paste a model, watch it analyzed — trace / static / prof
 | **Profile by cost** — the fat layer glows red | **Color by role** — attention / MLP / norm |
 | ![profile cost heatmap](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/profile.gif) | ![color a transformer by role](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/roles.gif) |
 
+**On real models** — paste it, get the graph:
+
+| resnet18 (folded) | GPT-2 from config (role-colored) | MobileNetV3 (folded) |
+|:--:|:--:|:--:|
+| ![resnet18 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/resnet.gif) | ![GPT-2 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/gpt2.gif) | ![MobileNetV3 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/mobilenet.gif) |
+
 ## Why
 
 When you build a model or wire a multi-stage pipeline, the *structure* and the
