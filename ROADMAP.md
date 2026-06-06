@@ -120,16 +120,26 @@ Design rules for the LLM layer:
 
 ## Later 0.1.x / v0.2 — depth & reach
 
-- **Trace diffing.** Compare two runs (before/after an edit, or two model
-  variants): graph diff + shape diff. The iteration superpower.
+**Shipped since 0.1.0** (on `main`, pending the next PyPI cut):
+
+- ✅ **Trace diffing** — `netscope.diff` + a colored before/after view (the
+  iteration superpower). Keyed by qualname so it survives a layer insert.
+- ✅ **Richer metadata** — dtype, device, activation + param **memory** (free) and
+  per-layer **wall-time** (`profile=True`), surfaced as a cost heatmap. (FLOPs stay
+  the opt-in `thop` extra.)
+- ✅ **Role lens** — color a model by architectural role (attention / MLP / norm /
+  embedding); the structural slice of the LLM-specific views below.
+- ✅ **Playground** — `python -m netscope.playground`, a local paste-a-model live
+  editor ⇄ graph (trace / static / profile / diff).
+
+**Still open:**
+
 - **`scope=` capture API** (isolation Level 2): `with netscope.graph(scope=model.layers[2])`
   — record only a subtree, pure-library.
-- **Click-to-focus** (isolation Level 1): instant subtree focus in the graph, no
-  re-run.
-- **Richer metadata:** dtype, device, param + activation memory, FLOPs (thop,
-  opt-in), per-layer timing.
-- **LLM-specific views:** attention-head maps, KV-cache shapes, generation-step
-  timeline — ties straight back to sfumato.
+- **Click-to-focus** (isolation Level 1): instant subtree focus in the graph, no re-run.
+- **Deeper LLM-specific views:** attention-head maps (needs attention *weights* — an
+  opt-in value capture), KV-cache shapes + a generation-step timeline (need
+  multi-forward capture) — ties straight back to sfumato.
 
 ## Later / bigger bets
 

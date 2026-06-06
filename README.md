@@ -44,6 +44,16 @@ trace** and render it where you write code.
 
 netscope captures the real run and turns it into a graph you can actually read.
 
+## Install
+
+```bash
+pip install netscope          # the engine + standalone HTML renderer (needs PyTorch)
+```
+
+> First PyPI release pending — until it lands, install from a clone with
+> `pip install -e .`. The VSCode / Cursor extension lives in `extension/`; the
+> fastest way to *try* netscope with no editor is `python -m netscope.playground`.
+
 ## Quickstart
 
 ```python
@@ -91,7 +101,8 @@ is kept, never tensors.
   embedding) so a transformer's structure reads at a glance; `netscope.roles(g)`
   returns the breakdown.
 
-…and three optional, key-gated layers on top (all work offline without them):
+…plus three optional layers on top — the in-editor experience needs **no key**;
+the LLM features are bring-your-own-key; everything works offline without them:
 
 - **In-editor live experience** — inline shape hints + mismatch squiggles on the
   line as you write; the static skeleton + clashes refresh live on save.
@@ -100,6 +111,17 @@ is kept, never tensors.
   dashed nodes) and **generated views** (a prompt → a safe re-styling of the graph).
 - **MCP server** — expose the live graph + real shapes to coding agents
   (Cursor / Claude Code) so they query reality instead of guessing.
+
+## Playground
+
+```bash
+python -m netscope.playground       # opens http://localhost:8770
+```
+
+Paste a model on the left, watch the real netscope graph build on the right as you
+type — `trace` / `static` / `profile` / `diff` modes. It's the clips above, live
+and local. (It runs your code to trace it — the same trust as `python yourfile.py`,
+bound to localhost.)
 
 ## Gallery
 
@@ -226,7 +248,7 @@ import netscope ─► wrapt post-import hooks patch torch + transformers
                  │  (gated by an active capture session; capture-once)
                  ▼
    contextvars parent-stack ──► typed IR over networkx.DiGraph
-       {kind, parent, source, loc{file,line}, meta{shape,dtype,params}}
+       {kind, parent, source, loc{file,line}, meta{shape,dtype,device,params,bytes,time}}
                  │
    ┌─────────────┼───────────────┬──────────────┬────────────────┐
    ▼             ▼               ▼              ▼                ▼
@@ -239,18 +261,24 @@ import netscope ─► wrapt post-import hooks patch torch + transformers
               ── reused verbatim by the VSCode webview ──
 ```
 
-Each layer is independently usable. The renderer libs are vendored and **inlined
-into the generated HTML**, so a graph is one self-contained file — works offline
-and inside locked-down webviews.
+Each layer is independently usable, and the newer features are just more consumers
+of that one IR — **trace diffing** compares two graphs, the **cost heatmap** and
+**role lens** are enrichments over node metadata, the **playground** re-renders on
+each edit. The renderer libs are vendored and **inlined into the generated HTML**,
+so a graph is one self-contained file — works offline and inside locked-down webviews.
 
 ## Develop
 
 ```bash
 python3 -m venv .venv --system-site-packages
 .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest tests/          # 172 passed, 1 skipped (FLOPs: thop optional)
+.venv/bin/python -m pytest tests/          # 182 passed, 1 skipped (FLOPs: thop optional)
 cd extension && npm run test:unit && npm run test:headless
 ```
 
 Optional extras: `pip install -e ".[flops]"` (THOP per-layer FLOPs),
 `".[otel]"` (OpenTelemetry export seam).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
