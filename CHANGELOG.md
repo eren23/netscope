@@ -27,11 +27,32 @@ _Nothing yet._
   live graph (trace / static / profile / diff modes).
 - **Extension** — `Run & Trace (Profiled)` and `Diff with Last Trace` commands.
 - **Demo videos** (`docs/video/`) + a README front door and a "See it live" gallery.
+- **`netscope` CLI** — a unified console command (`netscope static|playground|mcp|
+  diff|views`) + a `python -m netscope` dispatcher; `torch`/`hf` install extras; a
+  `py.typed` marker so downstream type-checkers see the hints.
+- **CI** — GitHub Actions: pytest (3.9–3.12, CPU torch), the extension
+  (tsc/unit/headless), and build + twine check on push/PR.
 
 ### Fixed
-- Mismatch checker is now rank-aware: encoder→decoder **sequence-length**
-  differences no longer false-flag as shape clashes (the feature axis is the last
-  axis for 2-D/3-D tensors, the channel axis for 4-D NCHW).
+- **Mismatch checker** is rank-aware: encoder→decoder sequence-length differences
+  (and Conv1d/(N,C,L) length changes) no longer false-flag — and a Conv1d *channel*
+  clash, previously missed, is now caught.
+- **Exception mid-forward** no longer corrupts the rest of a session — the post-hook
+  registers with `always_call=True`, so a raised forward unwinds its span / timing /
+  parent state instead of mis-parenting and mislabeling the next model.
+- **Static analysis** no longer false-flags idiomatic CNN heads (it won't wire a
+  `Conv → Linear` sibling across an implicit `flatten()`).
+- **Trace diffing**: sibling ops with no qualname/loc no longer collapse in the index
+  (a real add/remove is kept), and removed subtrees keep their hierarchy as ghosts.
+- **`NVGraph.from_dict`** skips dangling edges (no junk auto-created nodes from a
+  truncated trace).
+- **Extension graph** shows mismatch warnings again — the ⚠ pill, warn list, and red
+  clash edges were missing in the webview; `render.ts` is back at parity with the
+  standalone sink (warnings, edge-warn, source row, inferred styling), and `merge.py`
+  matches `mergeByLoc.ts` on static-edge fusion.
+- **MCP `trace_file`** surfaces the script's real exit code + stderr (not a generic
+  "no graph"), validates `mode`, and uses `mkstemp`. Plus smaller nits: mermaid id
+  collisions, timeline sort on mixed types, an accurate threading note, dead code.
 
 ### Security
 - **Playground origin guard** — `python -m netscope.playground` runs the editor's
@@ -41,6 +62,9 @@ _Nothing yet._
 - **HTML injection** — the standalone graph escapes `</` in its embedded data so a
   crafted node name can't close the inlined `<script>` (the editor webview already
   had a nonce CSP; this covers `g.show()` output too).
+- **MCP file-read** — `explain_node` loads an untrusted trace JSON, so source-line
+  reads are restricted to the project dir; a crafted `loc.file` can no longer
+  exfiltrate arbitrary files into the LLM prompt.
 
 ## [0.1.3] — baseline (built; PyPI release pending)
 

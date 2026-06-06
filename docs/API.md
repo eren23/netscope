@@ -91,14 +91,27 @@ configured; everything else works offline.
 - `nl.infer(graph, source, filename="<source>") -> NVGraph` — augment with
   LLM-inferred provisional (dashed, confidence-scored) structure.
 
-## Command-line / module entry points
+## Command-line
+
+After `pip install`, a unified **`netscope`** command wraps the tools:
 
 ```bash
-python -m netscope.static  <file.py>            # static graph (declared-dim checks, no run)
-python -m netscope.playground [port]            # local live editor ⇄ graph (default :8770)
-python -m netscope.mcp                           # MCP server (JSON-RPC over stdio) for agents
-python -m netscope.core.diff  before.json after.json [--html out | --graph-json out]
-python -m netscope.llm.views  graph.json "highlight attention"   # prompt -> a view spec
+netscope static  model.py                       # static graph (declared-dim checks, no run)
+netscope playground [port]                       # local live editor ⇄ graph (default :8770)
+netscope mcp                                      # MCP server (JSON-RPC over stdio) for agents
+netscope diff    before.json after.json [--html out | --graph-json out]
+netscope views   graph.json "highlight attention"
+```
+
+Each maps to a module entry point, which also works directly:
+
+```bash
+python -m netscope <cmd> ...                      # same dispatcher as `netscope`
+python -m netscope.static  <file.py>
+python -m netscope.playground [port]
+python -m netscope.mcp
+python -m netscope.core.diff  before.json after.json [...]
+python -m netscope.llm.views  graph.json "highlight attention"
 python -m netscope.llm        graph.json <node_id> <question>     # one-shot assistant
 ```
 

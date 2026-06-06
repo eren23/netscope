@@ -59,6 +59,9 @@ first — it's intentionally not a hard dependency, since torch wheels are large
 platform-specific). Add `transformers` too if you trace Hugging Face models.
 netscope itself is light — just `wrapt` + `networkx`.
 
+After install you also get a **`netscope`** command — `netscope playground`,
+`netscope static model.py`, `netscope mcp`, … (see [docs/API.md](https://github.com/eren23/netscope/blob/main/docs/API.md)).
+
 ## Quickstart
 
 ```python
