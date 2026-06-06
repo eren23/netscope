@@ -33,6 +33,15 @@ _Nothing yet._
   differences no longer false-flag as shape clashes (the feature axis is the last
   axis for 2-D/3-D tensors, the channel axis for 4-D NCHW).
 
+### Security
+- **Playground origin guard** — `python -m netscope.playground` runs the editor's
+  code, so the loopback server now rejects any request whose `Host` isn't loopback
+  (defeats DNS rebinding) or that carries a cross-origin `Origin` (defeats CSRF) —
+  a remote page can no longer drive the code-exec endpoint.
+- **HTML injection** — the standalone graph escapes `</` in its embedded data so a
+  crafted node name can't close the inlined `<script>` (the editor webview already
+  had a nonce CSP; this covers `g.show()` output too).
+
 ## [0.1.3] — baseline (built; PyPI release pending)
 
 The core product: auto-trace PyTorch / Hugging Face with zero decorators, an

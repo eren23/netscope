@@ -62,6 +62,27 @@ def analyze(code: str, mode: str, profile: bool) -> dict:
             "nodes": len(g.nodes()), "warnings": len(detect_mismatches(g))}
 
 
+def _origin_ok(host, origin):
+    """Reject anything that isn't a same-machine request, BEFORE we exec the body.
+
+    The endpoint runs the editor's code, so binding to loopback isn't enough: a
+    page you visit could POST to http://127.0.0.1:<port>/analyze (CSRF), or rebind
+    a domain to 127.0.0.1 (DNS rebinding). Defenses:
+      * Host must be loopback   -> a rebound domain sends its own Host, so it fails
+      * no cross-origin Origin  -> a browser always sends Origin on a cross-site POST
+    Together these stop a remote page from driving code execution; a local client
+    (the playground page itself, or curl with no Origin) passes.
+    """
+    h = (host or "").rsplit(":", 1)[0].strip("[]").lower()
+    if h not in ("localhost", "127.0.0.1", "::1", ""):
+        return False
+    if origin:
+        from urllib.parse import urlparse
+        if (urlparse(origin).hostname or "").lower() not in ("localhost", "127.0.0.1", "::1"):
+            return False
+    return True
+
+
 class _Handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype="application/json"):
         b = body.encode("utf-8") if isinstance(body, str) else body
@@ -72,6 +93,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
     def do_GET(self):
+        if not _origin_ok(self.headers.get("Host"), self.headers.get("Origin")):
+            self._send(403, json.dumps({"ok": False, "error": "forbidden"})); return
         path = self.path.split("?")[0]
         if path in ("/", "/index.html"):
             self._send(200, PAGE, "text/html; charset=utf-8")
@@ -81,6 +104,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(404, json.dumps({"ok": False, "error": "not found"}))
 
     def do_POST(self):
+        if not _origin_ok(self.headers.get("Host"), self.headers.get("Origin")):
+            self._send(403, json.dumps({"ok": False, "error": "forbidden (non-local origin)"})); return
         if self.path != "/analyze":
             self._send(404, json.dumps({"ok": False}))
             return

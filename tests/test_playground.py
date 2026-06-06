@@ -49,3 +49,17 @@ def test_static_mode_flags_a_declared_dim_clash_without_running():
 def test_missing_model_raises_a_clear_error():
     with pytest.raises(ValueError):
         _trace_code("x = 1\n", False)      # no `model` defined
+
+
+def test_origin_guard_allows_local_blocks_remote():
+    from netscope.playground import _origin_ok
+
+    # legit: the playground page (same-origin POST) and a local client (no Origin)
+    assert _origin_ok("localhost:8770", "http://localhost:8770")
+    assert _origin_ok("127.0.0.1:8770", None)
+    assert _origin_ok("localhost:8770", "")
+    # CSRF: a remote page POSTing straight at 127.0.0.1 — its Origin gives it away
+    assert not _origin_ok("127.0.0.1:8770", "http://evil.com")
+    # DNS rebinding: a rebound domain carries its own Host, so it fails the check
+    assert not _origin_ok("evil.com:8770", None)
+    assert not _origin_ok("attacker.example", "https://attacker.example")

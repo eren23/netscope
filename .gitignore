@@ -11,6 +11,7 @@ extension/out/
 *.netviz.html
 .playwright-mcp/
 *.png
+!docs/img/*.png          # keep the README's committed figures (the broad *.png ignores stray screenshots)
 .DS_Store
 *.vsix
 .claude/

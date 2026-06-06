@@ -382,7 +382,9 @@ function show(ctx: vscode.ExtensionContext, graph: NVGraph, title: string): void
   currentGraphTag = _m ? _m[2] : undefined;
   currentGraphFile = graph.nodes.find((n) => n.loc && n.loc.file)?.loc?.file;
   const tpl = fs.readFileSync(templatePath(ctx), "utf-8");
-  const elements = JSON.stringify(toElements(graph));
+  // escape `</` so data strings can't close the inlined <script> early; the nonce
+  // CSP below already blocks injected scripts, this is belt-and-suspenders.
+  const elements = JSON.stringify(toElements(graph)).replace(/<\//g, "<\\/");
   const n = nonce();
   // FUNCTION replacers: the minified libs + elements JSON contain `$&`/`$'`/`$\``
   // sequences that String.replace interprets specially in a string replacement

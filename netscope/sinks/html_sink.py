@@ -113,7 +113,10 @@ def to_html(g, title: str = None) -> str:
     title = title or g.name or "netscope"
     with open(_TEMPLATE, encoding="utf-8") as f:
         tpl = f.read()
-    elements = json.dumps(to_cytoscape(g))
+    # escape `</` so a string in the data (e.g. a crafted node name) can't close
+    # the inlined <script> early and inject markup. `<\/` is identical JS. The
+    # standalone HTML has no CSP to fall back on, so this is the real guard.
+    elements = json.dumps(to_cytoscape(g)).replace("</", "<\\/")
     return (
         tpl.replace("__NETSCOPE_VENDOR__", _vendor_scripts())
         .replace("__NETSCOPE_ELEMENTS__", elements)
