@@ -7,8 +7,6 @@ the node's `loc`. The model is told to ground every claim in that context and to
 cite file:line. This is what keeps answers honest — it explains/annotates the
 graph, it doesn't invent architecture.
 """
-from __future__ import annotations
-
 import os
 from typing import List, Optional
 

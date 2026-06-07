@@ -10,8 +10,6 @@ fx fails on dynamic control flow (data-dependent branches/loops — many LLMs,
 returns an `NVGraph` on success and `None` on any failure, so the caller falls
 back to runtime tracing (which handles everything).
 """
-from __future__ import annotations
-
 import inspect
 from typing import Optional
 

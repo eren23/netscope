@@ -9,8 +9,6 @@ Importing netscope auto-installs framework instrumentation via wrapt post-import
 hooks (import-order independent): the torch forward-hook tracer activates while a
 capture session is open. No decorators or model edits required.
 """
-from __future__ import annotations
-
 from netscope.core.capture import Capture, graph
 from netscope.core.context import active_capture, is_capturing
 from netscope.core.diff import annotate_diff as _annotate_diff

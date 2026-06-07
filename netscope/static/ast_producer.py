@@ -10,8 +10,6 @@ Parses a source file and recovers semantics that runtime tracing is blind to:
 Every node carries ``source="static"`` and its ``loc`` so ``core.merge`` can fuse
 it onto the runtime graph by source location. Output is a plain ``NVGraph``.
 """
-from __future__ import annotations
-
 import ast
 from typing import Optional
 

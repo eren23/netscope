@@ -6,8 +6,6 @@ underlying `NVGraph`. Producers emit via `cap.span(...)` (context manager) or th
 lower-level `open_span` / `close_span` pair (used by the torch pre/post forward
 hooks, which are two separate callbacks and so cannot use a `with` block).
 """
-from __future__ import annotations
-
 import contextlib
 import itertools
 import os

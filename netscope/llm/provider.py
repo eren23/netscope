@@ -12,8 +12,6 @@ Env (first non-empty wins for the key):
     NETSCOPE_LLM_BASE_URL  (default: https://openrouter.ai/api/v1)
     NETSCOPE_LLM_MODEL     (default: a cheap, capable model)
 """
-from __future__ import annotations
-
 import json
 import os
 import time

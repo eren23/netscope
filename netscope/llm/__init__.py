@@ -10,8 +10,6 @@ netscope is untouched and works fully offline.
     if nl.available():
         print(nl.explain(graph, node_id, question="why_warn"))
 """
-from __future__ import annotations
-
 from typing import Optional
 
 from netscope.llm.prompts import build_messages

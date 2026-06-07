@@ -1,7 +1,5 @@
 """JSON sink — the raw IR, schema-versioned. The interchange format the VSCode
 extension streams/loads and the format every other tool can consume."""
-from __future__ import annotations
-
 import json
 
 

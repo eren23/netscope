@@ -5,8 +5,6 @@ that a container node's params aren't the sum of its children (which would
 double-count once the children are their own nodes). `total_params` is the full
 recursive count, handy for a model-root summary.
 """
-from __future__ import annotations
-
 
 def own_params(module) -> int:
     try:

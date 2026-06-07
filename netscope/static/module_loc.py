@@ -10,8 +10,6 @@ names by index ("body.0", "body.1", ...).
 Pure AST, no execution. Best-effort: anything it can't resolve simply isn't in
 the map, and the tracer falls back to `loc=None` (today's behavior).
 """
-from __future__ import annotations
-
 import ast
 from typing import Dict, Optional
 

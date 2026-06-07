@@ -9,8 +9,6 @@ The fused node keeps the runtime ``meta`` and gains the static ``attrs``.
 Nodes present on only one side are carried through unchanged, so static-only
 structure (e.g. a vote stage the tracer can't see) still appears.
 """
-from __future__ import annotations
-
 from typing import Optional
 
 from netscope.core.ir import NVGraph

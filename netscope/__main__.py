@@ -9,8 +9,6 @@
 Each subcommand delegates to that tool's own entry point, so `python -m
 netscope.static …` etc. keep working unchanged.
 """
-from __future__ import annotations
-
 import sys
 
 _USAGE = "usage: netscope {static|playground|mcp|diff|views} ...\n"

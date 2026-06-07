@@ -4,8 +4,6 @@ Speaks JSON-RPC 2.0. `Server.handle(request_dict) -> response_dict` is pure and
 fully testable; the stdio framing lives in __main__. Tools return the MCP
 `{"content": [{"type": "text", "text": ...}], "isError": bool}` shape.
 """
-from __future__ import annotations
-
 import json
 import os
 import subprocess

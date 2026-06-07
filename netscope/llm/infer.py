@@ -12,8 +12,6 @@ SCHEMA-VALIDATED (bad/dangling entries dropped), never trusted blindly. A non-JS
 or empty reply adds nothing — the original graph is returned unchanged. Gated on
 an LLM key like the rest of the layer.
 """
-from __future__ import annotations
-
 import json
 from typing import Optional
 

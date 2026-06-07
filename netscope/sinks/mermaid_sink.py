@@ -1,8 +1,6 @@
 """Mermaid sink — a cheap secondary export for docs / paper figures / quick
 terminal-pasteable diagrams. `contains` edges are skipped (hierarchy is shown
 via labels rather than Mermaid subgraphs to keep it robust)."""
-from __future__ import annotations
-
 
 def _label(node: dict) -> str:
     name = node["name"]

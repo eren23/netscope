@@ -10,8 +10,6 @@ only during capture (zero hooks => zero overhead otherwise).
 This is also the framework-extensibility seam: new frameworks register an
 instrumentor without touching core.
 """
-from __future__ import annotations
-
 _session_instrumentors: list = []
 
 

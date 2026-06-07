@@ -7,8 +7,6 @@ the NETSCOPE_OUT trace) and shows the answer in the node panel. Reads the graph
 from a file so it works on any saved/streamed trace. Prints the answer to stdout;
 a clear message + nonzero exit if no provider is configured.
 """
-from __future__ import annotations
-
 import json
 import sys
 

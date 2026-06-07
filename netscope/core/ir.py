@@ -13,8 +13,6 @@ Node ``kind``:  pipeline | stage | model | module | op
 Edge ``kind``:  dataflow | control | contains
 ``source``:     runtime | static | fused
 """
-from __future__ import annotations
-
 from typing import Any, Optional
 
 import networkx as nx

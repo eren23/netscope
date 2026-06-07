@@ -5,8 +5,6 @@ hierarchy renders as nested boxes and `contains` edges are dropped) and injects
 them into the shared `web/template.html`. That same template is reused verbatim
 by the M4 VSCode webview, so the renderer is written once.
 """
-from __future__ import annotations
-
 import html as _html
 import json
 import os
