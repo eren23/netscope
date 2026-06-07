@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "netscope"
-version = "0.1.4"
+version = "0.1.5"
 description = "An oscilloscope for your neural net — import and auto-trace any PyTorch/transformers pipeline into an interactive architecture graph with live tensor shapes, zero decorators."
 requires-python = ">=3.10"
 dependencies = [
