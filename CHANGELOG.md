@@ -5,6 +5,8 @@ Nothing is on PyPI yet — the first published release is pending.
 
 ## [Unreleased]
 
+## [0.1.5] — 2026-06-07
+
 ### Added
 - **SAM 3** (Meta's Segment Anything Model 3 — a CLIP-text-conditioned DETR
   detector + mask decoder) traces end-to-end: build it from config and netscope

@@ -2,8 +2,8 @@
   "name": "netscope",
   "displayName": "netscope \u2014 ML pipeline graph",
   "description": "An oscilloscope for your neural net: trace & visualize PyTorch/transformers architectures with live tensor shapes, right in the editor.",
-  "version": "0.1.4",
-  "publisher": "netscope",
+  "version": "0.1.5",
+  "publisher": "eren23",
   "engines": {
     "vscode": "^1.85.0"
   },
