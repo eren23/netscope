@@ -40,11 +40,16 @@ top-level pipeline you can drill into):
 |:--:|:--:|:--:|
 | ![resnet18 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/resnet.gif) | ![GPT-2 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/gpt2.gif) | ![MobileNetV3 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/mobilenet.gif) |
 
-…and **detection / DETR** — YOLOv8 (272 layers) and RT-DETR (639), folded to a pipeline:
+…and **detection / segmentation** — YOLOv8 (272 layers), RT-DETR (639), and **SAM 3**
+(Meta's 848M detect · segment · track model), each folded to a readable pipeline:
 
-| YOLOv8 | RT-DETR |
-|:--:|:--:|
-| ![YOLOv8 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/yolo.gif) | ![RT-DETR traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/rtdetr.gif) |
+| YOLOv8 | RT-DETR | SAM 3 |
+|:--:|:--:|:--:|
+| ![YOLOv8 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/yolo.gif) | ![RT-DETR traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/rtdetr.gif) | ![SAM 3 traced](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/sam3.gif) |
+
+> **SAM 3** (and **SAM 3.1**, the same architecture with improved checkpoints) live in
+> **transformers v5** — build it from config and netscope traces the whole vision
+> ViT + CLIP-text + DETR detector + mask-decoder stack, no 848M download.
 
 ## Why
 
@@ -67,9 +72,10 @@ pip install netscope          # the engine + standalone HTML renderer (needs PyT
 > `pip install -e .`. The VSCode / Cursor extension lives in `extension/`; the
 > fastest way to *try* netscope with no editor is `python -m netscope.playground`.
 
-**Requirements:** Python ≥ 3.9 and **PyTorch** (install it for your platform
+**Requirements:** Python ≥ 3.10 and **PyTorch** (install it for your platform
 first — it's intentionally not a hard dependency, since torch wheels are large and
-platform-specific). Add `transformers` too if you trace Hugging Face models.
+platform-specific). Add `transformers` too if you trace Hugging Face models
+(**v5+** for SAM 3 and the newest architectures).
 netscope itself is light — just `wrapt` + `networkx`.
 
 After install you also get a **`netscope`** command — `netscope playground`,

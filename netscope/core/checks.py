@@ -68,15 +68,22 @@ def _check_edge(a, b, src, dst, edge_shape=None) -> Optional[dict]:
 
     # 1) rank mismatch first — e.g. Conv2d (N,C,H,W) into a Linear (N,F). The
     #    feature-dim check would give a confusing number; the real fix is a
-    #    flatten/reshape, so say that.
+    #    flatten/reshape, so say that. But only in the HIGHER->LOWER direction: a
+    #    genuine "forgot flatten()" is a 4-D feature map flowing into a 2-D consumer.
+    #    The REVERSE (a lower-rank producer into a higher-rank consumer) is almost
+    #    always an auxiliary/broadcast input — a rotary / sine position table, a
+    #    mask, a scalar — not a wiring bug, so stay silent (conservative; flagging it
+    #    false-alarms on every transformer's rotary_emb -> attention, the SAM3 dogfood).
     if len(a_shape) != len(b_shape):
-        return {
-            **base, "kind": "rank_mismatch",
-            "detail": (
-                f"{a_name} emits a {len(a_shape)}-D tensor but "
-                f"{b_name} expects {len(b_shape)}-D — missing a flatten()/reshape()?"
-            ),
-        }
+        if len(a_shape) > len(b_shape):
+            return {
+                **base, "kind": "rank_mismatch",
+                "detail": (
+                    f"{a_name} emits a {len(a_shape)}-D tensor but "
+                    f"{b_name} expects {len(b_shape)}-D — missing a flatten()/reshape()?"
+                ),
+            }
+        return None
 
     # 2) same rank: compare ONLY the feature/channel axis (see _feature_axis).
     #    A clash there — Linear in!=out, a transformer embed-dim mismatch, a Conv

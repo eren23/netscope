@@ -5,7 +5,28 @@ Nothing is on PyPI yet — the first published release is pending.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+- **SAM 3** (Meta's Segment Anything Model 3 — a CLIP-text-conditioned DETR
+  detector + mask decoder) traces end-to-end: build it from config and netscope
+  captures the whole vision-ViT + text + DETR + mask-decoder graph, folded to a
+  readable left-to-right pipeline. Hermetic test (`tests/test_sam3.py`) builds a
+  shrunk SAM3 locally — no 848M Hub download — and a `sam3` demo scene/GIF.
+  (SAM 3.1 is the same architecture with improved "Object Multiplex" checkpoints.)
+- **Playground multi-input models** — a snippet can define an `inputs` dict
+  (`inputs = dict(pixel_values=..., input_ids=...)`) and netscope traces
+  `model(**inputs)`, not just a single `model(x)`. Lets SAM 3 / BERT-style models
+  with several forward arguments run in the playground.
+
+### Changed
+- **Python ≥ 3.10** (dropped 3.9) and **transformers v5** for the `hf` extra —
+  this is the line that ships SAM 3 / SAM 2 / RT-DETR. CI now tests 3.10–3.12; the
+  existing suite already passed on v5.
+
+### Fixed
+- **Mismatch checker** no longer false-flags a *lower*-rank producer feeding a
+  *higher*-rank consumer (a rotary / sine position-embedding table into attention —
+  the SAM 3 dogfood). A "missing flatten()" is only the higher→lower direction
+  (a 4-D conv map into a 2-D Linear); the reverse is an auxiliary/broadcast input.
 
 ## [0.1.4]
 

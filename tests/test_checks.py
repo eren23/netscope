@@ -167,6 +167,30 @@ def test_concat_fanin_consumer_is_not_false_flagged():
     assert detect_mismatches(g) == []   # fan-in merge — per-edge check skipped
 
 
+def test_low_rank_aux_input_into_higher_rank_consumer_is_not_flagged():
+    # a rotary / sine position embedding emits a LOW-rank table (2-D) that feeds a
+    # HIGHER-rank consumer (4-D attention) as an auxiliary input. Lower->higher is
+    # NOT a "forgot flatten()" bug (that's the higher->lower direction: a 4-D conv
+    # map into a 2-D Linear). Flagging it false-alarms on every transformer's
+    # rotary/pos-embed (the SAM3 rotary_emb -> attention dogfood). Stay silent.
+    g = NVGraph("m")
+    g.add_node("rope", kind="module", name="RotaryEmbedding", meta={"out_shape": [16, 64]})
+    g.add_node("attn", kind="module", name="Attention", meta={"in_shape": [1, 8, 16, 64]})
+    g.add_edge("rope", "attn", kind="dataflow", tensor_meta={"shape": [16, 64]})
+    assert detect_mismatches(g) == []
+
+
+def test_higher_rank_into_lower_rank_still_flags_missing_flatten():
+    # the converse must STILL fire — a 4-D feature map into a 2-D consumer is the
+    # genuine missing-flatten() bug, regardless of the new direction guard.
+    g = NVGraph("m")
+    g.add_node("c", kind="module", name="Conv2d", meta={"out_shape": [1, 64, 8, 8]})
+    g.add_node("l", kind="module", name="Linear", meta={"in_shape": [1, 4096]})
+    g.add_edge("c", "l", kind="dataflow", tensor_meta={"shape": [1, 64, 8, 8]})
+    w = detect_mismatches(g)
+    assert len(w) == 1 and w[0]["kind"] == "rank_mismatch"
+
+
 def test_capture_attaches_warnings_to_graph_dict():
     import netscope
 

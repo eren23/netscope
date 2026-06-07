@@ -2,7 +2,8 @@
 // Drives the live playground, "types" a scripted scene, records 1280x720 video.
 //   1. python -m netscope.playground 8770 --no-open
 //   2. PW_PATH=<playwright dir> node tools/record_scene.mjs <scene>
-// scenes: bug | shapes | diff | profile
+// scenes: bug | shapes | diff | profile | roles | playground | resnet | gpt2 |
+//         mobilenet | rtdetr | yolo | sam3
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PW_PATH || 'playwright');
@@ -206,6 +207,24 @@ async function sceneMobilenet(p) {
 
 const RTDETR = `import torch\nfrom transformers import RTDetrConfig, RTDetrModel\n\nmodel = RTDetrModel(RTDetrConfig(num_queries=20))\nx = torch.randn(1, 3, 224, 224)\n`;
 const YOLO = `import torch\nfrom ultralytics import YOLO\n\nmodel = YOLO("yolov8n.yaml").model\nx = torch.randn(1, 3, 640, 640)\n`;
+const SAM3 = `import torch
+from transformers import Sam3Config, Sam3Model
+
+# SAM 3 — Meta's detect + segment + track model (DETR detector + mask
+# decoder), built compact from config so it traces instantly (no 848M download)
+cfg = Sam3Config(
+    vision_config={"backbone_config": {"num_hidden_layers": 2}},
+    text_config={"num_hidden_layers": 2},
+    detr_encoder_config={"num_layers": 1},
+    detr_decoder_config={"num_layers": 1, "num_queries": 20},
+    geometry_encoder_config={"num_layers": 1},
+)
+model = Sam3Model(cfg)
+inputs = dict(
+    pixel_values=torch.randn(1, 3, 1008, 1008),
+    input_ids=torch.tensor([[49406, 320, 2368, 49407]]),
+)
+`;
 
 async function sceneRtdetr(p) {
   await mode_(p, 'trace');
@@ -231,7 +250,30 @@ async function sceneYolo(p) {
   await sleep(3000);
 }
 
-const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile, roles: sceneRoles, playground: scenePlayground, resnet: sceneResnet, gpt2: sceneGpt2, mobilenet: sceneMobilenet, rtdetr: sceneRtdetr, yolo: sceneYolo };
+async function sceneSam3(p) {
+  await mode_(p, 'trace');
+  await p.evaluate(() => window.nsSet(''));
+  await sleep(250);
+  await cap_(p, '<b>SAM 3</b> — the detect · segment · track model from Meta, built from config.');
+  await sleep(700);
+  await set_(p, SAM3);
+  await sleep(6500);   // forward + render (auto-folds the ~200-node graph)
+  // SAM3 is deeply nested (maxDepth 6), so collapse to its top-level blocks — the
+  // visible graph becomes depth-1 and the layout switches to a clean L->R pipeline.
+  const fr = await graphFrame(p);
+  if (fr) await fr.evaluate(() => {
+    if (!window.cy || !window.ecApi) return;
+    const root = cy.nodes().filter((n) => n.parent().empty())[0];
+    const blocks = cy.nodes().filter((n) => n.isParent() && !n.parent().empty() && n.parent()[0].id() === root.id());
+    try { window.ecApi.collapse(blocks); } catch (e) {}
+    try { if (typeof window.relayout === 'function') window.relayout(); } catch (e) {}
+  });
+  await sleep(900);
+  await cap_(p, 'Vision ViT + CLIP text + DETR detector + mask decoder — folded to a readable pipeline.');
+  await sleep(3600);
+}
+
+const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile, roles: sceneRoles, playground: scenePlayground, resnet: sceneResnet, gpt2: sceneGpt2, mobilenet: sceneMobilenet, rtdetr: sceneRtdetr, yolo: sceneYolo, sam3: sceneSam3 };
 
 (async () => {
   const run = SCENES[scene];

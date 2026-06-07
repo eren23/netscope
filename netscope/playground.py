@@ -35,14 +35,18 @@ def _trace_code(code: str, profile: bool):
     ns = {"torch": torch, "nn": torch.nn, "netscope": netscope}
     exec(compile(code, "<playground>", "exec"), ns)    # local: your own code, like python
     model = ns.get("model")
-    x = ns.get("x")
     if model is None:
         raise ValueError("define `model` in the snippet")
-    if x is None:
-        raise ValueError("define an example input `x`")
+    # most snippets define a single example input `x` -> model(x). Multi-input
+    # models (SAM3 wants pixel_values + input_ids; a BERT wants input_ids +
+    # attention_mask) instead define an `inputs` dict -> model(**inputs).
+    inputs = ns.get("inputs")
+    x = ns.get("x")
+    if inputs is None and x is None:
+        raise ValueError("define an example input `x` (or an `inputs` dict for multi-input models)")
     with netscope.graph("playground", profile=profile) as g:
         with torch.no_grad():
-            model(x)
+            model(**inputs) if inputs is not None else model(x)
     return g
 
 
