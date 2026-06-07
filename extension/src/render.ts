@@ -2,9 +2,22 @@
 // the webview renders graphs identically to the standalone HTML: `parent` maps
 // to compound nodes, `contains` edges are implied by nesting (dropped).
 
-import { NVGraph } from "./ir";
+import { NVGraph, NVNode, NVWarning } from "./ir";
 
-function label(n: any): string {
+// Cytoscape element payloads (the `data` blocks the webview's cytoscape reads),
+// mirroring the dicts netscope/sinks/html_sink.py:to_cytoscape emits.
+interface CyNodeData {
+  id: string; name: string; label: string; kind: string;
+  meta: Record<string, unknown>; loc: NVNode["loc"]; prov: string;
+  parent?: string; warn?: boolean; role: string; inferred?: boolean;
+  diff?: unknown; diff_detail?: unknown;
+}
+interface CyEdgeData {
+  id: string; source: string; target: string; kind: string;
+  flow?: string; warn?: boolean; label?: string;
+}
+
+function label(n: NVNode): string {
   const out = n.meta && (n.meta.out_shape as number[] | undefined);
   return out ? `${n.name}\n[${out.join(", ")}]` : n.name;
 }
@@ -21,15 +34,18 @@ const ROLE_KEYS: [string, string[]][] = [
   ["linear", ["linear", "proj", "dense", "lm_head", "out_proj", "fc"]],
 ];
 
-function nodeRole(n: any): string {
-  const s = `${n.name || ""} ${(n.meta && n.meta.qualname) || ""}`.toLowerCase();
+function nodeRole(n: NVNode): string {
+  const qualname = (n.meta && (n.meta.qualname as string)) || "";
+  const s = `${n.name || ""} ${qualname}`.toLowerCase();
   for (const [role, keys] of ROLE_KEYS) {
     if (keys.some((k) => s.includes(k))) return role;
   }
   return "other";
 }
 
-export function toElements(g: NVGraph): { nodes: any[]; edges: any[]; warnings: any[] } {
+export function toElements(
+  g: NVGraph
+): { nodes: { data: CyNodeData }[]; edges: { data: CyEdgeData }[]; warnings: NVWarning[] } {
   // nodes/edges touched by a mismatch warning -> data.warn, so the renderer paints
   // them red; the top-level `warnings` array drives the HUD ⚠ pill + warn list.
   const warns = g.warnings || [];
@@ -42,15 +58,15 @@ export function toElements(g: NVGraph): { nodes: any[]; edges: any[]; warnings: 
   }
 
   const nodes = g.nodes.map((n) => {
-    const data: any = {
+    const data: CyNodeData = {
       id: n.id, name: n.name, label: label(n), kind: n.kind,
       meta: n.meta || {}, loc: n.loc, prov: n.source,   // prov = the panel's "source" row
+      role: nodeRole(n),                                // transformer "color by role" lens
     };
     if (n.parent) data.parent = n.parent;
     if (warnIds.has(n.id)) data.warn = true;
-    data.role = nodeRole(n);              // transformer "color by role" lens
 
-    const attrs = n.attrs || {};
+    const attrs: Record<string, unknown> = n.attrs || {};
     if (attrs.inferred) data.inferred = true;   // LLM-inferred -> dashed/dim styling
     // trace-diff tags (added|removed|changed|same) drive the green/amber styling;
     // the cost overlay reads meta.* directly, so it needs nothing extra here.
@@ -61,10 +77,12 @@ export function toElements(g: NVGraph): { nodes: any[]; edges: any[]; warnings: 
     return { data };
   });
 
-  const edges: any[] = [];
+  const edges: { data: CyEdgeData }[] = [];
   g.edges.forEach((e, i) => {
     if (e.kind === "contains") return; // implied by compound nesting
-    const data: any = { id: `e${i}`, source: e.src, target: e.dst, kind: e.kind };
+    // `flow` carries the edge's producer (runtime/static/inferred) — the standalone
+    // HTML styles edge[flow="inferred"], so the editor webview needs it for parity.
+    const data: CyEdgeData = { id: `e${i}`, source: e.src, target: e.dst, kind: e.kind, flow: e.source };
     if (warnPairs.has(`${e.src}->${e.dst}`)) data.warn = true;   // paint the clash edge red
     const shape = e.tensor_meta && e.tensor_meta.shape;
     if (shape && shape.length) data.label = shape.join("x");

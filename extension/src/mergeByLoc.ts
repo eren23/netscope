@@ -39,15 +39,15 @@ export function mergeByLoc(runtime: NVGraph, staticG: NVGraph): NVGraph {
   // reduce() hint markers — no loc, so they never loc-match)? If so the static
   // AST's "branch loop"/"vote" are redundant duplicates that would float as
   // disconnected strays in the fused view.
-  const rtHasBranch = runtime.nodes.some((n) => (n.attrs || ({} as any)).branch);
-  const rtHasReduce = runtime.nodes.some((n) => (n.attrs || ({} as any)).reduce);
+  const rtHasBranch = runtime.nodes.some((n) => n.attrs?.branch);
+  const rtHasReduce = runtime.nodes.some((n) => n.attrs?.reduce);
 
   // 2) static-only nodes (structure the runtime never saw). Drop the redundant
   //    ones: declared-dim nodes, and branch/reduce stages the runtime already
   //    captured. Mirrors netscope/core/merge.py.
   for (const st of staticG.nodes) {
     if (matchedStatic.has(st.id)) continue;
-    const a = (st.attrs || ({} as any));
+    const a: Record<string, unknown> = st.attrs || {};
     if (a.declared_dim) continue;
     if (a.branch && rtHasBranch) continue;
     if (a.reduce && rtHasReduce) continue;

@@ -58,11 +58,12 @@ function execAsync(
         const child = cp.execFile(
           pythonPath(), args,
           { cwd: cwd(), env: opts.env || process.env, maxBuffer: 64 * 1024 * 1024 },
-          (err: any, stdout: string, stderr: string) => {
+          (err: cp.ExecFileException | null, stdout: string, stderr: string) => {
             if (err && err.code === "ENOENT") {
               resolve({ code: -1, stdout: "", stderr: "", failed: "ENOENT" });
             } else {
-              resolve({ code: err ? (err.code ?? 1) : 0, stdout: stdout || "", stderr: stderr || "" });
+              const code = err ? (typeof err.code === "number" ? err.code : 1) : 0;
+              resolve({ code, stdout: stdout || "", stderr: stderr || "" });
             }
           }
         );
@@ -110,7 +111,7 @@ function runStaticQuiet(file: string): Promise<NVGraph | null> {
   return new Promise((resolve) => {
     cp.execFile(pythonPath(), ["-m", "netscope.static", file],
       { cwd: cwd(), env: process.env, maxBuffer: 32 * 1024 * 1024 },
-      (err: any, stdout: string) => {
+      (err: cp.ExecFileException | null, stdout: string) => {
         if (err) { resolve(null); return; }
         try { resolve(JSON.parse(stdout) as NVGraph); } catch { resolve(null); }
       });
@@ -118,7 +119,7 @@ function runStaticQuiet(file: string): Promise<NVGraph | null> {
 }
 
 async function runAndTrace(file: string, extraEnv?: NodeJS.ProcessEnv): Promise<NVGraph | null> {
-  const outPath = path.join(os.tmpdir(), `netscope-run-${process.pid}-${Date.now()}.json`);
+  const outPath = tmpJsonPath("run");
   const r = await execAsync([file], {
     title: "netscope: running & tracing…",
     env: { ...process.env, NETSCOPE_OUT: outPath, ...extraEnv },
@@ -147,7 +148,7 @@ async function runAndTrace(file: string, extraEnv?: NodeJS.ProcessEnv): Promise<
 // Re-run the file with NETSCOPE_ISOLATE set so the library re-runs JUST the
 // chosen submodule on its real input and dumps that focused sub-trace.
 async function runIsolate(file: string, qualname: string): Promise<NVGraph | null> {
-  const outPath = path.join(os.tmpdir(), `netscope-iso-${process.pid}-${Date.now()}.json`);
+  const outPath = tmpJsonPath("iso");
   const r = await execAsync([file], {
     title: `netscope: isolating ${qualname}…`,
     env: { ...process.env, NETSCOPE_ISOLATE: qualname, NETSCOPE_ISOLATE_OUT: outPath },
@@ -237,7 +238,7 @@ async function runLLM(
     if (pick === "Set API Key") await vscode.commands.executeCommand("netscope.setLlmKey");
     return null;
   }
-  const gpath = path.join(os.tmpdir(), `netscope-llm-${process.pid}-${Date.now()}.json`);
+  const gpath = tmpJsonPath("llm");
   try {
     fs.writeFileSync(gpath, JSON.stringify(graph));
     const r = await execAsync(["-m", "netscope.llm", gpath, nodeId, question], {
@@ -253,12 +254,19 @@ async function runLLM(
   }
 }
 
+// A validated view spec: a list of declarative ops (highlight/filter/colorBy) the
+// webview applies. The extension passes ops through verbatim, so each op is an
+// opaque record; netscope/llm/views.py is the schema authority.
+interface ViewSpec {
+  ops: Array<Record<string, unknown>>;
+}
+
 // Generated views: turn a prompt into a declarative view spec (highlight/filter/
 // colorBy) the webview applies. Shells out to the views CLI with the LLM env;
 // returns the validated spec, or null (the webview just clears) on no key/failure.
 async function runViewSpec(
   ctx: vscode.ExtensionContext, graph: NVGraph, prompt: string
-): Promise<{ ops: unknown[] } | null> {
+): Promise<ViewSpec | null> {
   const env = await llmEnv(ctx);
   if (!env) {
     const pick = await vscode.window.showWarningMessage(
@@ -266,7 +274,7 @@ async function runViewSpec(
     if (pick === "Set API Key") await vscode.commands.executeCommand("netscope.setLlmKey");
     return null;
   }
-  const gpath = path.join(os.tmpdir(), `netscope-view-${process.pid}-${Date.now()}.json`);
+  const gpath = tmpJsonPath("view");
   try {
     fs.writeFileSync(gpath, JSON.stringify(graph));
     const r = await execAsync(["-m", "netscope.llm.views", gpath, prompt], {
@@ -277,6 +285,12 @@ async function runViewSpec(
   } finally {
     try { fs.unlinkSync(gpath); } catch { /* ignore */ }
   }
+}
+
+// A unique temp path for a graph JSON handed between the extension and a netscope
+// subprocess; `kind` distinguishes the call site (run/iso/llm/view/diff).
+function tmpJsonPath(kind: string): string {
+  return path.join(os.tmpdir(), `netscope-${kind}-${process.pid}-${Date.now()}.json`);
 }
 
 function nonce(): string {
@@ -505,7 +519,7 @@ export function activate(ctx: vscode.ExtensionContext): void {
         );
         return;
       }
-      const out = path.join(os.tmpdir(), `netscope-diff-${process.pid}-${Date.now()}.json`);
+      const out = tmpJsonPath("diff");
       const r = await execAsync(
         ["-m", "netscope.core.diff", prevTracePath, currTracePath, "--graph-json", out],
         { title: "netscope: diffing traces…" }
