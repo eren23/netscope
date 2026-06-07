@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 from netscope.llm.views import (
     VIEW_SPEC_SCHEMA, apply_view_spec, parse_view_spec, generate_view_spec,

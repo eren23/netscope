@@ -175,13 +175,13 @@ def _tool_query_node(args: dict) -> Dict[str, Any]:
 
     by_id = {n["id"]: n for n in g.nodes()}
     up, down = [], []
-    for e in g.edges():
-        if e["kind"] != "dataflow":
+    for edge in g.edges():
+        if edge["kind"] != "dataflow":
             continue
-        if e["dst"] == node["id"] and e["src"] in by_id:
-            up.append(by_id[e["src"]])
-        if e["src"] == node["id"] and e["dst"] in by_id:
-            down.append(by_id[e["dst"]])
+        if edge["dst"] == node["id"] and edge["src"] in by_id:
+            up.append(by_id[edge["src"]])
+        if edge["src"] == node["id"] and edge["dst"] in by_id:
+            down.append(by_id[edge["dst"]])
     warns = [w for w in g.to_dict()["warnings"]
              if w.get("src") == node["id"] or w.get("dst") == node["id"]]
     return _text({
@@ -272,7 +272,7 @@ class Server:
             return ok({"tools": TOOLS})
         if method == "tools/call":
             name = params.get("name")
-            fn = _DISPATCH.get(name)
+            fn = _DISPATCH.get(name) if isinstance(name, str) else None
             if fn is None:
                 return err(-32602, f"unknown tool: {name}")
             try:

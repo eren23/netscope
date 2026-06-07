@@ -24,7 +24,7 @@ torch = ["torch>=2.0"]
 hf = ["transformers>=5"]
 flops = ["thop>=0.1.1"]
 otel = ["opentelemetry-api>=1.20"]
-dev = ["pytest>=7", "thop>=0.1.1"]
+dev = ["pytest>=7", "thop>=0.1.1", "ruff>=0.6", "mypy>=1.10", "vulture>=2.10"]
 
 [project.scripts]
 netscope = "netscope.__main__:main"
@@ -52,3 +52,27 @@ netscope = ["py.typed", "web/*.html", "web/**/*.html", "web/*.js", "web/**/*.js"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+# pyflakes (F) is the real gate: unused imports/vars, undefined names. The
+# E4/E7/E9 pycodestyle subset catches import-placement and statement-structure
+# issues. The test suite's compact one-liner style is intentional, so the
+# stylistic E-rules are relaxed there only.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E401", "E402", "E701", "E702", "E731", "E741"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["netscope"]
+# torch/transformers/wrapt/thop ship partial or no stubs; the runtime they trace
+# is dynamic by nature, so missing third-party types are ignored rather than
+# stubbed. Internal netscope code is checked; tighten incrementally.
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = true

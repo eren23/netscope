@@ -84,8 +84,8 @@ def _extract_json(text: str) -> Optional[dict]:
     t = text.strip()
     if t.startswith("```"):
         # strip a leading ```json / ``` fence and the trailing ```
-        t = t.split("```", 2)
-        t = t[1] if len(t) >= 2 else text
+        parts = t.split("```", 2)
+        t = parts[1] if len(parts) >= 2 else text
         if t.lstrip().lower().startswith("json"):
             t = t.lstrip()[4:]
     t = t.strip().strip("`").strip()
@@ -126,7 +126,8 @@ def _validate(payload: dict) -> tuple:
             "confidence": _clamp(n.get("confidence", 0.5)),
         })
     edges = []
-    raw_edges = payload.get("edges") if isinstance(payload.get("edges"), list) else []
+    _edges = payload.get("edges")
+    raw_edges = _edges if isinstance(_edges, list) else []
     for e in raw_edges:
         if not isinstance(e, dict):
             continue

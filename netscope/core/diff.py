@@ -108,7 +108,9 @@ def diff_graphs(before: NVGraph, after: NVGraph) -> dict:
         else:
             same += 1
 
-    _sort = lambda lst: sorted(lst, key=lambda x: str(x["key"]))
+    def _sort(lst):
+        return sorted(lst, key=lambda x: str(x["key"]))
+
     added, removed, changed = _sort(added), _sort(removed), _sort(changed)
     return {
         "added": added, "removed": removed, "changed": changed, "same": same,
@@ -190,7 +192,8 @@ def _main(argv=None) -> int:
 
     ap = argparse.ArgumentParser(prog="netscope.diff",
                                  description="Diff two netscope traces (JSON dumps).")
-    ap.add_argument("before"); ap.add_argument("after")
+    ap.add_argument("before")
+    ap.add_argument("after")
     ap.add_argument("--html", help="write the annotated, colored diff graph here")
     ap.add_argument("--graph-json", help="write the annotated diff graph as IR JSON "
                     "(diff-tagged nodes) — what the extension loads into its webview")

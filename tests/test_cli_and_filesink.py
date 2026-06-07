@@ -48,7 +48,7 @@ def test_static_cli_nodes_carry_loc(tmp_path):
 def test_file_sink_writes_runtime_graph_when_env_set(tmp_path, monkeypatch):
     out = tmp_path / "run.netscope.json"
     monkeypatch.setenv("NETSCOPE_OUT", str(out))
-    with netscope.graph("run") as g:
+    with netscope.graph("run"):
         with netscope.stage("plan"):
             pass
     assert out.exists()

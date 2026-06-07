@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
 from netscope.core.ir import NVGraph
 from netscope.llm.infer import infer_structure, INFER_SCHEMA

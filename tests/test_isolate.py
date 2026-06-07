@@ -33,7 +33,7 @@ def test_isolate_reruns_only_target_on_real_input(tmp_path, monkeypatch):
     monkeypatch.setenv("NETSCOPE_ISOLATE", "2")          # the second Linear
     monkeypatch.setenv("NETSCOPE_ISOLATE_OUT", str(iso_out))
 
-    with netscope.graph("full") as g:
+    with netscope.graph("full"):
         model(torch.randn(1, 4))
 
     assert iso_out.exists(), "isolation should dump a focused sub-trace"
@@ -81,7 +81,7 @@ def test_isolate_handles_kwargs(tmp_path, monkeypatch):
     iso_out = tmp_path / "iso.json"
     monkeypatch.setenv("NETSCOPE_ISOLATE", "block")
     monkeypatch.setenv("NETSCOPE_ISOLATE_OUT", str(iso_out))
-    with netscope.graph("net") as g:
+    with netscope.graph("net"):
         Net().train(False)(torch.randn(1, 8))
 
     assert iso_out.exists()

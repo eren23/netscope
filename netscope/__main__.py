@@ -24,8 +24,8 @@ def main(argv=None) -> int:
         from netscope.playground import main as run
         return run(rest)
     if cmd == "mcp":
-        from netscope.mcp.__main__ import main as run
-        return run()
+        from netscope.mcp.__main__ import main as run_mcp
+        return run_mcp()
     if cmd == "diff":
         from netscope.core.diff import _main as run
         return run(rest)

@@ -15,7 +15,7 @@ Predicate keys (all optional, ANDed): kind, name_contains, params_gt, params_lt,
 dtype, device.
 """
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from netscope.llm.provider import Provider, Transport
 

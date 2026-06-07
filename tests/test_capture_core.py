@@ -17,7 +17,7 @@ def test_inactive_by_default():
 
 
 def test_graph_session_activates_then_deactivates():
-    with netscope.graph("m") as g:
+    with netscope.graph("m"):
         assert ctx.is_capturing() is True
         assert netscope.active_capture() is not None
     assert ctx.is_capturing() is False
@@ -37,8 +37,8 @@ def test_spans_collected_into_graph():
 def test_span_nesting_sets_parent_and_contains_edge():
     with netscope.graph("m") as g:
         cap = netscope.active_capture()
-        with cap.span("plan", kind="stage") as plan_id:
-            with cap.span("qwen", kind="model") as qwen_id:
+        with cap.span("plan", kind="stage"):
+            with cap.span("qwen", kind="model"):
                 pass
     qwen = next(n for n in g.nodes() if n["name"] == "qwen")
     plan = next(n for n in g.nodes() if n["name"] == "plan")

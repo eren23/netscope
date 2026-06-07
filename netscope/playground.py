@@ -30,7 +30,7 @@ _LAST = {"graph": None}
 
 def _trace_code(code: str, profile: bool):
     import torch
-    ns = {"torch": torch, "nn": torch.nn, "netscope": netscope}
+    ns: dict = {"torch": torch, "nn": torch.nn, "netscope": netscope}
     exec(compile(code, "<playground>", "exec"), ns)    # local: your own code, like python
     model = ns.get("model")
     if model is None:
@@ -96,7 +96,8 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if not _origin_ok(self.headers.get("Host"), self.headers.get("Origin")):
-            self._send(403, json.dumps({"ok": False, "error": "forbidden"})); return
+            self._send(403, json.dumps({"ok": False, "error": "forbidden"}))
+            return
         path = self.path.split("?")[0]
         if path in ("/", "/index.html"):
             self._send(200, PAGE, "text/html; charset=utf-8")
@@ -107,7 +108,8 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         if not _origin_ok(self.headers.get("Host"), self.headers.get("Origin")):
-            self._send(403, json.dumps({"ok": False, "error": "forbidden (non-local origin)"})); return
+            self._send(403, json.dumps({"ok": False, "error": "forbidden (non-local origin)"}))
+            return
         if self.path != "/analyze":
             self._send(404, json.dumps({"ok": False}))
             return
