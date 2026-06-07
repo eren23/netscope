@@ -1,6 +1,6 @@
 {
   "name": "netscope",
-  "displayName": "netscope \u2014 ML pipeline graph",
+  "displayName": "netscope — ML pipeline graph",
   "description": "An oscilloscope for your neural net: trace & visualize PyTorch/transformers architectures with live tensor shapes, right in the editor.",
   "version": "0.1.5",
   "publisher": "eren23",
@@ -98,7 +98,7 @@
         "netscope.llm.model": {
           "type": "string",
           "default": "",
-          "description": "Model for the LLM assistant (e.g. google/gemini-2.0-flash-001, gpt-4o-mini). Blank uses netscope's default. The API key is NOT here \u2014 set it via 'netscope: Set LLM API Key' (stored in your OS keychain)."
+          "description": "Model for the LLM assistant (e.g. google/gemini-2.0-flash-001, gpt-4o-mini). Blank uses netscope's default. The API key is NOT here — set it via 'netscope: Set LLM API Key' (stored in your OS keychain)."
         },
         "netscope.llm.baseUrl": {
           "type": "string",
@@ -116,13 +116,21 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "lint": "eslint src",
+    "knip": "knip",
+    "madge": "madge --circular --extensions ts src",
     "test:unit": "node ./out/test/mergeByLoc.test.js",
     "test:headless": "node ./test/headless.js"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@types/node": "^20",
     "@types/vscode": "^1.85.0",
-    "typescript": "^5.4.0"
+    "eslint": "^9.39.4",
+    "knip": "^6.16.1",
+    "madge": "^8.0.0",
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.60.1"
   },
   "license": "MIT",
   "repository": {
