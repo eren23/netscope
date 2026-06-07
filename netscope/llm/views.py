@@ -14,8 +14,6 @@ Ops:
 Predicate keys (all optional, ANDed): kind, name_contains, params_gt, params_lt,
 dtype, device.
 """
-from __future__ import annotations
-
 import json
 from typing import Any, Dict, List, Optional
 

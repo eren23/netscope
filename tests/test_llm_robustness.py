@@ -135,7 +135,7 @@ def test_build_messages_handles_missing_source_file():
     assert "source near" not in blob
 
 
-def test_cli_reports_missing_node_clearly(tmp_path, capsys):
+def test_cli_reports_missing_node_clearly(tmp_path):
     from netscope.llm.__main__ import main
     gp = tmp_path / "g.json"
     gp.write_text(json.dumps(NVGraph("g").to_dict()))

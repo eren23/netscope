@@ -6,8 +6,6 @@ Each ``with netscope.step():`` (see hints.api.step) leaves a stage node tagged
 the sequence length growing across decode steps (the autoregressive signature) is
 right there in the numbers.
 """
-from __future__ import annotations
-
 
 def _descendant_ids(graph, root_id) -> list:
     """All node ids under ``root_id`` (by the ``parent`` field), depth-first."""

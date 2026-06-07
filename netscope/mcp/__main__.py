@@ -4,8 +4,6 @@ Reads newline-delimited JSON-RPC requests from stdin, writes responses to stdout
 (one JSON object per line). Point Cursor / Claude Code at this command as an MCP
 server. Stdlib only.
 """
-from __future__ import annotations
-
 import json
 import sys
 

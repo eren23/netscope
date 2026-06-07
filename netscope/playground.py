@@ -17,8 +17,6 @@ LOCAL & TRUST: this binds to 127.0.0.1 and **executes the code in the editor** t
 trace it — exactly the trust level of running `python yourfile.py` yourself. Don't
 expose it to a network or paste code you wouldn't run.
 """
-from __future__ import annotations
-
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 

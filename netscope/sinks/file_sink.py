@@ -7,8 +7,6 @@ once the process finishes — a dependency-free alternative to live streaming.
 
 Best-effort: a failure to write must never break the user's program.
 """
-from __future__ import annotations
-
 import os
 
 

@@ -6,8 +6,6 @@ semantic regions that pure runtime capture can't infer — the `plan` stage, the
 manager, reentrancy-safe, records source loc for free, and is a pass-through
 when no capture session is open (zero overhead in production).
 """
-from __future__ import annotations
-
 import contextlib
 import functools
 import inspect

@@ -9,8 +9,6 @@ design (standard HF / torch naming); never raises, falls back to `other`.
 This powers the "group by attention vs MLP" view — color a transformer by role and
 its alternating attention/MLP structure pops out at a glance.
 """
-from __future__ import annotations
-
 # checked in order — block-level roles (attention/mlp) BEFORE the generic `linear`,
 # so an attention block's `q_proj` (which also matches "proj") lands in `attention`.
 _ROLE_KEYS = [

@@ -15,8 +15,6 @@ look entirely different by id. We key on a STABLE identity instead:
 `attrs.diff ∈ {added, removed, changed, same}` so the existing renderer paints it
 with no special-casing — diffing is just another set of node attrs.
 """
-from __future__ import annotations
-
 from typing import Optional
 
 from netscope.core.ir import NVGraph

@@ -4,8 +4,6 @@ The VSCode extension calls `python -m netscope.static <file.py>` whenever a file
 changes, to draw the on-type "skeleton" graph (stage/branch/vote structure)
 WITHOUT running the user's code. Output is the standard SCHEMA_VERSION IR JSON.
 """
-from __future__ import annotations
-
 import sys
 
 from netscope.static.ast_producer import analyze_file

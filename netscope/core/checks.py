@@ -5,8 +5,6 @@ a consumer's expected input. Returns structured warnings; the renderer paints
 the offending edges/nodes and lists the warnings. Conservative by design: if a
 shape is missing or ambiguous, we say nothing (no false alarms).
 """
-from __future__ import annotations
-
 from typing import Optional
 
 

@@ -12,8 +12,6 @@ This post-pass recovers the *intended* flow from the `branch` / `reduce` hints:
 Runs per parent group at session finalize, so nested pipelines stay isolated.
 Pure-torch graphs (no `stage` nodes) are a no-op.
 """
-from __future__ import annotations
-
 
 def _order(node_id: str) -> int:
     tail = node_id.rsplit("#", 1)[-1]

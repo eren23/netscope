@@ -12,8 +12,6 @@ Conservative by design: a layer is only checkable when its relevant dim is a
 literal int and the wiring is a direct `self.b(self.a(x))` / sequential chain.
 Anything ambiguous is simply not wired, so it is never falsely flagged.
 """
-from __future__ import annotations
-
 import ast
 from typing import Dict, List, Optional, Tuple
 

@@ -6,8 +6,6 @@ Instead this is an explicit call the user (or a demo) opts into. We delegate to
 `thop` if installed; anything goes wrong -> ``None`` (never raises), since this
 is enrichment, not core behavior.
 """
-from __future__ import annotations
-
 from typing import Optional
 
 

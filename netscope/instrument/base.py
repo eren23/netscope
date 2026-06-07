@@ -10,8 +10,6 @@ following the proven `wrapt` + `safe_patch` pattern:
   bookkeeping throws, the original call still runs and returns (MLflow's
   ``safe_patch`` rule).
 """
-from __future__ import annotations
-
 from typing import Callable, Optional
 
 import wrapt

@@ -17,8 +17,6 @@ an intermediate tensor is freed its id may be handed to an unrelated tensor, but
 the stale weakref is then dead, so no false edge is drawn. We keep only tensor
 metadata (shape) + a weakref, never a strong reference, so nothing is retained.
 """
-from __future__ import annotations
-
 import inspect
 import os
 import time
@@ -182,19 +180,7 @@ def _attach_isolation_capture(cap, module, qualname):
             except Exception:
                 pass
 
-    try:
-        return module.register_forward_pre_hook(grab, with_kwargs=True)
-    except TypeError:
-        # very old torch without with_kwargs: positional-only (kwargs lost, but
-        # modules whose kwargs have defaults still re-run fine).
-        def grab_pos(mod, args):
-            if getattr(cap, "_isolate_stash", None) is None:
-                try:
-                    cap._isolate_stash = (mod, _freeze(tuple(args)), {}, qualname)
-                except Exception:
-                    pass
-
-        return module.register_forward_pre_hook(grab_pos)
+    return module.register_forward_pre_hook(grab, with_kwargs=True)
 
 
 class TorchForwardInstrumentor:
@@ -327,10 +313,7 @@ class TorchForwardInstrumentor:
         # always_call=True so the post-hook fires even when a forward RAISES — then
         # `pending`/`starts`/the parent stack unwind cleanly instead of leaking a
         # half-open span that would mis-parent and mislabel the next forward.
-        try:
-            post_handle = register_module_forward_hook(post, always_call=True)
-        except TypeError:
-            post_handle = register_module_forward_hook(post)   # older torch: no always_call
+        post_handle = register_module_forward_hook(post, always_call=True)
         # `extra` is a live reference: per-module isolation hooks appended during
         # the run land here and get removed on exit alongside the global pair.
         return (pre_handle, post_handle, extra)

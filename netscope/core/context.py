@@ -10,8 +10,6 @@ stack are contextvars, so they're correct within one flow. But a model run in a
 torch hook's nesting state isn't shared across concurrently-suspended coroutines —
 so trace from one thread / one flow per `graph()`.
 """
-from __future__ import annotations
-
 import contextvars
 from typing import Optional
 

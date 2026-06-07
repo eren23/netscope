@@ -4,8 +4,6 @@ Wraps ``GenerationMixin.generate`` so every ``model.generate(...)`` becomes a
 `model` node while capturing (the LLM-call boundary in pipelines like sfumato's
 Qwen planner). Gated + safe via the shared ``span_wrapper``.
 """
-from __future__ import annotations
-
 from netscope.instrument.base import safe_patch
 
 _installed = False
