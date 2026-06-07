@@ -257,18 +257,7 @@ async function sceneSam3(p) {
   await cap_(p, '<b>SAM 3</b> — the detect · segment · track model from Meta, built from config.');
   await sleep(700);
   await set_(p, SAM3);
-  await sleep(6500);   // forward + render (auto-folds the ~200-node graph)
-  // SAM3 is deeply nested (maxDepth 6), so collapse to its top-level blocks — the
-  // visible graph becomes depth-1 and the layout switches to a clean L->R pipeline.
-  const fr = await graphFrame(p);
-  if (fr) await fr.evaluate(() => {
-    if (!window.cy || !window.ecApi) return;
-    const root = cy.nodes().filter((n) => n.parent().empty())[0];
-    const blocks = cy.nodes().filter((n) => n.isParent() && !n.parent().empty() && n.parent()[0].id() === root.id());
-    try { window.ecApi.collapse(blocks); } catch (e) {}
-    try { if (typeof window.relayout === 'function') window.relayout(); } catch (e) {}
-  });
-  await sleep(900);
+  await sleep(7000);   // forward + render — auto-folds the deep model to a top-level pipeline
   await cap_(p, 'Vision ViT + CLIP text + DETR detector + mask decoder — folded to a readable pipeline.');
   await sleep(3600);
 }

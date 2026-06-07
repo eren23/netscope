@@ -406,9 +406,17 @@ function outermostRepeatedCompounds(){
 //      RT-DETR ~639), keep folding the deepest compounds until the visible graph
 //      hits a readable size — leaving the high-level blocks, each expandable.
 const FOLD_TARGET = 36;
+// Fold the deepest expanded compounds until the visible graph is BOTH small enough
+// (<= target) AND flat — a top-level pipeline (depth <= 1). Capping COUNT alone
+// isn't enough: a deeply-nested model (SAM3 is maxDepth 6) hits the count target
+// while still nested several levels. dagre then STACKS the nested compound boxes
+// vertically (SAM3 became a tall overflowing column even at depth 2), so the visible
+// graph must be flattened to its top-level blocks for dagre to read it as a clean
+// L->R pipeline. Naturally-flat folded models (YOLO/RT-DETR/resnet fold to depth 1
+// via the count pass) already satisfy this, so the extra depth pass is a no-op.
 function autoFold(target){
   if (!ecApi || !ecApi.collapsibleNodes) return;
-  for (let i = 0; i < 40 && cy.nodes(":visible").length > target; i++){
+  for (let i = 0; i < 40 && (cy.nodes(":visible").length > target || maxDepth() > 1); i++){
     const coll = ecApi.collapsibleNodes();          // expanded compounds we can fold
     if (!coll || !coll.nonempty()) break;
     let maxd = -1; coll.forEach((n)=>{ const d = nodeDepth(n); if (d > maxd) maxd = d; });
@@ -419,7 +427,7 @@ function autoFold(target){
 if (ecApi && maxDepth() >= 3){
   const reps = outermostRepeatedCompounds();
   if (reps.length){ try { ecApi.collapse(reps); } catch(_){} }
-  if (cy.nodes(":visible").length > FOLD_TARGET) autoFold(FOLD_TARGET);
+  if (cy.nodes(":visible").length > FOLD_TARGET || maxDepth() > 1) autoFold(FOLD_TARGET);
 }
 runLayout();
 
