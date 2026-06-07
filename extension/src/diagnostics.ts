@@ -5,7 +5,7 @@
 // with the producer's line as a fallback.
 
 import * as vscode from "vscode";
-import { NVGraph, NVNode } from "./ir";
+import { NVGraph, NVNode, NVWarning } from "./ir";
 
 const COLLECTION = "netscope";
 
@@ -18,23 +18,13 @@ function lineRange(document: vscode.TextDocument, line1: number): vscode.Range {
   return document.lineAt(lineIdx).range;
 }
 
-// netscope warnings are {src, dst, detail, severity, kind, source?}.
-interface Warning {
-  src: string;
-  dst: string;
-  detail: string;
-  severity?: string;
-  kind?: string;
-  source?: string;
-}
-
 /** Populate red squiggles for `document` from the file's traced graph warnings. */
 export function publish(
   collection: vscode.DiagnosticCollection,
   document: vscode.TextDocument,
   graph: NVGraph
 ): number {
-  const warnings = ((graph as unknown as { warnings?: Warning[] }).warnings) || [];
+  const warnings: NVWarning[] = graph.warnings || [];
   if (!warnings.length) {
     collection.set(document.uri, []);
     return 0;
@@ -68,9 +58,4 @@ export function publish(
   }
   collection.set(document.uri, diags);
   return diags.length;
-}
-
-/** Clear squiggles for a file (its trace went stale on edit). */
-export function clear(collection: vscode.DiagnosticCollection, uri: vscode.Uri): void {
-  collection.set(uri, []);
 }

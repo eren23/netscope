@@ -56,7 +56,3 @@ function applyTo(editor: vscode.TextEditor): void {
   }
   editor.setDecorations(decoType, decos);
 }
-
-export function disposeShapeDecorations(): void {
-  decoType.dispose();
-}
