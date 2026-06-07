@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 
-from netscope.mcp.server import Server, TOOLS
+from netscope.mcp.server import Server
 
 
 def _srv():

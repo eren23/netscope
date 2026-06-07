@@ -319,7 +319,7 @@ class TorchForwardInstrumentor:
         return (pre_handle, post_handle, extra)
 
     def on_exit(self, handles) -> None:
-        flat = []
+        flat: list = []
         for h in handles:
             (flat.extend if isinstance(h, list) else flat.append)(h)
         for h in flat:

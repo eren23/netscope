@@ -28,7 +28,7 @@ def _is_range_loop(node: ast.For) -> bool:
 
 def _range_count(node: ast.For) -> Optional[int]:
     """The branch count IF it is a literal int, else None (e.g. range(n_branches))."""
-    if not _is_range_loop(node):
+    if not _is_range_loop(node) or not isinstance(node.iter, ast.Call):
         return None
     last = node.iter.args[-1]
     if isinstance(last, ast.Constant) and isinstance(last.value, int):
@@ -91,7 +91,7 @@ class _Visitor(ast.NodeVisitor):
     def visit_For(self, node: ast.For):
         if _is_range_loop(node):
             count = _range_count(node)              # None when range(variable)
-            attrs = {"branch": True}
+            attrs: dict[str, object] = {"branch": True}
             label = "branch loop"
             if count is not None:
                 attrs["repeat"] = count

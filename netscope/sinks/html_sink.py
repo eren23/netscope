@@ -9,6 +9,7 @@ import html as _html
 import json
 import os
 import tempfile
+from typing import Optional
 
 from netscope.enrich.roles import node_role
 
@@ -107,7 +108,7 @@ def to_cytoscape(g) -> dict:
     return {"nodes": nodes, "edges": edges, "warnings": warnings}
 
 
-def to_html(g, title: str = None) -> str:
+def to_html(g, title: Optional[str] = None) -> str:
     title = title or g.name or "netscope"
     with open(_TEMPLATE, encoding="utf-8") as f:
         tpl = f.read()
@@ -122,7 +123,7 @@ def to_html(g, title: str = None) -> str:
     )
 
 
-def show(g, path: str = None, open_browser: bool = True) -> str:
+def show(g, path: Optional[str] = None, open_browser: bool = True) -> str:
     if path is None:
         safe = (g.name or "graph").replace(os.sep, "_") or "graph"
         path = os.path.join(tempfile.gettempdir(), f"{safe}.netscope.html")

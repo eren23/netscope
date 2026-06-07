@@ -12,7 +12,6 @@ import json
 import pytest
 
 from netscope.core.ir import NVGraph
-from netscope.llm import explain, LLMUnavailable
 from netscope.llm.provider import Provider, RETRYABLE_STATUS
 from netscope.llm.prompts import build_messages
 
