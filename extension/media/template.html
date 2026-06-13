@@ -783,8 +783,15 @@ if(_broll) _broll.onclick=()=>{ roleOn ? clearRole() : applyRole(); _broll.class
 
 // ---- attention entropy overlay: color nodes cool->hot by mean per-head entropy --
 // Mirrors the role lens: toggle btn-attention, mutual-exclusive with role + cost.
+function _toast(msg){
+  const bar=document.getElementById("hud"); if(!bar) return;
+  let t=document.getElementById("hud-toast");
+  if(!t){ t=document.createElement("span"); t.id="hud-toast";
+    t.style.cssText="color:#ebcb8b;font-size:11px;letter-spacing:.06em;margin-left:10px;"; bar.appendChild(t); }
+  t.textContent=msg; setTimeout(()=>{ if(t) t.textContent=""; }, 4000);
+}
 let attnOn=false;
-function clearAttn(){ cy.nodes().forEach(n=>n.removeData("attncolor")); attnOn=false;
+function clearAttn(){ cy.nodes().forEach(n=>n.removeData("attncolor")); attnOn=false; renderLegend("kind");
   const b=document.getElementById("btn-attention"); if(b) b.classList.remove("on"); }
 function applyAttn(){
   if(typeof clearCost==="function") clearCost();   // mutually exclusive with cost
@@ -797,7 +804,7 @@ function applyAttn(){
     const mean=ah.reduce((s,h)=>s+(typeof h.entropy==="number"?h.entropy:0),0)/ah.length;
     vals.set(n.id(), mean); if(mean>max) max=mean;
   });
-  if(max<=0) return;
+  if(max<=0){ _toast("· no attention captured — re-run with capture={'attention'}"); return; }
   vals.forEach((v,id)=>{ cy.getElementById(id).data("attncolor",_heat(v/max)); });
   attnOn=true;
 }
