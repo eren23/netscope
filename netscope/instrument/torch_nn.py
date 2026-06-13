@@ -129,6 +129,18 @@ def _kv_cache_shape(output) -> Optional[dict]:
     return None
 
 
+def _attention_weights(output):
+    """First tensor in `output` that looks like attention weights: 4-D with equal
+    last two dims ([batch, heads, q, k] with q==k). None if absent. Heuristic —
+    best-effort; netscope requests output_attentions on HF models (see
+    transformers_hf). The caller must drop the return value right after reducing
+    it (we store per-head stats, never the tensor)."""
+    for t in _iter_tensors(output):
+        if _is_tensor(t) and t.dim() == 4 and t.shape[-1] == t.shape[-2]:
+            return t
+    return None
+
+
 def _first_tensor(obj):
     """The first tensor reachable in obj (descending dict/tuple/list), or None.
     Used to read dtype/device off a module's representative input/output."""
@@ -330,6 +342,18 @@ class TorchForwardInstrumentor:
                 update["dtype"] = _dtype(out_t)
             if "device" not in cur_meta and _device(out_t) is not None:
                 update["device"] = _device(out_t)
+            if cap.wants("kv_cache"):
+                kv = _kv_cache_shape(output)
+                if kv is not None:
+                    update["kv_cache"] = kv
+            if cap.wants("attention"):
+                aw = _attention_weights(output)
+                if aw is not None:
+                    from netscope.enrich.attention import head_stats
+                    stats = head_stats(aw)
+                    if stats:
+                        update["attn_heads"] = stats
+                    del aw  # drop the tensor immediately — record stats, not values
             cap.close_span(handle, meta_update=update or None)
             for t in _iter_tensors(output):
                 try:

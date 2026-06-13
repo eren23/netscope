@@ -34,3 +34,24 @@ def test_4d_input_is_meaned_over_batch_and_lists_each_head():
 def test_non_3d_or_4d_input_returns_empty():
     assert head_stats(torch.rand(4, 4)) == []        # 2D
     assert head_stats(torch.rand(5)) == []            # 1D
+
+
+import netscope
+
+
+class _AttnModel(torch.nn.Module):
+    def forward(self, x):
+        attn = torch.softmax(torch.rand(1, 3, 4, 4), dim=-1)  # [b,heads,q,k]
+        return (x, attn)
+
+
+def test_attention_recorded_only_when_opted_in():
+    m, x = _AttnModel(), torch.zeros(1, 4, 8)
+    with netscope.graph("on", capture={"attention"}) as g:
+        m(x)
+    hit = [n for n in g.nodes() if (n.get("meta") or {}).get("attn_heads")]
+    assert hit and len(hit[0]["meta"]["attn_heads"]) == 3
+
+    with netscope.graph("off") as g2:
+        m(x)
+    assert all("attn_heads" not in (n.get("meta") or {}) for n in g2.nodes())

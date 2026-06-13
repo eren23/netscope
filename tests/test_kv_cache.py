@@ -25,3 +25,23 @@ def test_cache_object_with_key_cache():
 def test_no_kv_returns_none():
     assert _kv_cache_shape(torch.zeros(2, 3)) is None
     assert _kv_cache_shape({"logits": torch.zeros(1, 5, 10)}) is None
+
+
+import netscope
+
+
+class _KVModel(torch.nn.Module):
+    def forward(self, x):
+        k = torch.zeros(1, 8, x.shape[1], 64)
+        return {"logits": x, "past_key_values": ((k, k),)}
+
+
+def test_kv_cache_recorded_only_when_opted_in():
+    m, x = _KVModel(), torch.zeros(1, 5, 16)
+    with netscope.graph("on", capture={"kv_cache"}) as g:
+        m(x)
+    assert any((n.get("meta") or {}).get("kv_cache", {}).get("seq") == 5 for n in g.nodes())
+
+    with netscope.graph("off") as g2:        # default: nothing recorded
+        m(x)
+    assert all("kv_cache" not in (n.get("meta") or {}) for n in g2.nodes())
