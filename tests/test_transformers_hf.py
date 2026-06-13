@@ -31,3 +31,24 @@ def test_register_is_idempotent():
     # ran register() at import time; calling again hits the `_installed` guard.
     transformers_hf.register()
     assert transformers_hf._installed is True
+
+
+import netscope
+from netscope.instrument.transformers_hf import _maybe_request_attentions
+
+
+def test_injects_output_attentions_when_capturing_attention():
+    with netscope.graph("g", capture={"attention"}):
+        kwargs = _maybe_request_attentions({})
+        assert kwargs.get("output_attentions") is True
+
+
+def test_does_not_inject_by_default():
+    with netscope.graph("g"):
+        assert "output_attentions" not in _maybe_request_attentions({})
+
+
+def test_respects_user_explicit_value():
+    with netscope.graph("g", capture={"attention"}):
+        kwargs = _maybe_request_attentions({"output_attentions": False})
+        assert kwargs["output_attentions"] is False   # never override the user
