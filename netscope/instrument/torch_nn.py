@@ -101,6 +101,34 @@ def _act_bytes(x) -> Optional[int]:
         return None
 
 
+def _kv_cache_shape(output) -> Optional[dict]:
+    """Shape summary of a KV cache found in a module output — metadata only, no
+    tensor retained. Handles HF's legacy tuple-of-(k,v)-per-layer and v5 Cache
+    objects. Returns {layers, shape:[b,heads,seq,head_dim], seq} or None."""
+    pkv = None
+    if isinstance(output, dict):
+        pkv = output.get("past_key_values")
+    else:
+        pkv = getattr(output, "past_key_values", None)
+    if pkv is None:
+        return None
+    try:
+        # v5 Cache object: a list of per-layer key tensors
+        key_cache = getattr(pkv, "key_cache", None)
+        if key_cache:
+            k0 = key_cache[0]
+            shape = list(k0.shape)
+            return {"layers": len(key_cache), "shape": shape, "seq": int(shape[-2])}
+        # legacy: ((k, v), (k, v), ...)
+        if isinstance(pkv, (tuple, list)) and pkv and isinstance(pkv[0], (tuple, list)):
+            k0 = pkv[0][0]
+            shape = list(k0.shape)
+            return {"layers": len(pkv), "shape": shape, "seq": int(shape[-2])}
+    except Exception:
+        return None
+    return None
+
+
 def _first_tensor(obj):
     """The first tensor reachable in obj (descending dict/tuple/list), or None.
     Used to read dtype/device off a module's representative input/output."""
