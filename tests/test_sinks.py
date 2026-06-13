@@ -64,3 +64,13 @@ def test_show_writes_openable_file(tmp_path):
     assert os.path.exists(out)
     with open(out) as f:
         assert "cytoscape" in f.read().lower()
+
+
+def test_html_has_attention_overlay_control():
+    from netscope.core.ir import NVGraph
+    g = NVGraph(name="t")
+    g.add_node("a", kind="module", name="self_attn",
+               meta={"attn_heads": [{"entropy": 1.0, "dist": 2.0, "last": 0.1}]})
+    html = g.to_html()
+    assert "btn-attention" in html          # the new overlay button id
+    assert "attn_heads" in html             # per-head data reaches the webview

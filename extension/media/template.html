@@ -150,6 +150,7 @@
       <option value="param_bytes">cost: params</option>
     </select>
     <button class="hbtn" id="btn-role" title="color nodes by architectural role (attention/MLP/norm/…)">⊕ role</button>
+    <button class="hbtn" id="btn-attention" title="color attention nodes by a per-head stat (mean entropy)">⊕ attention</button>
   </span>
   <span class="warnpill" id="warnpill" title="shape mismatches">⚠ <span id="warncount">0</span></span>
   <span class="live"><span class="dot"></span> tracing</span>
@@ -282,6 +283,12 @@ const cy = cytoscape({
         "border-color": "data(rolecolor)", "border-width": 3, "border-opacity": 1,
         "underlay-color": "data(rolecolor)", "underlay-opacity": 0.45, "underlay-padding": 11,
         "z-index": 87 } },
+
+    // --- attention entropy overlay: color nodes cool->hot by mean per-head entropy.
+    { selector: "node[attncolor]", style: {
+        "border-color": "data(attncolor)", "border-width": 3, "border-opacity": 1,
+        "underlay-color": "data(attncolor)", "underlay-opacity": 0.45, "underlay-padding": 11,
+        "z-index": 86 } },
 
     { selector: "node.hi", style: {
         "underlay-opacity": 0.5, "underlay-padding": 12, "border-width": 2.2, "z-index": 99 } },
@@ -479,7 +486,7 @@ function _heat(t){ t=Math.max(0,Math.min(1,t));
   const c=lo.map((v,i)=>Math.round(v+(hi[i]-v)*k)); return "rgb("+c[0]+","+c[1]+","+c[2]+")"; }
 function clearCost(){ cy.nodes().forEach(n=> n.removeData("costcolor costval")); }
 function applyCost(field){
-  clearCost(); if(typeof clearRole==="function") clearRole(); if(!field) return;
+  clearCost(); if(typeof clearRole==="function") clearRole(); if(typeof clearAttn==="function") clearAttn(); if(!field) return;
   // leaf modules, plus stage nodes (generation steps carry their own time_ms) —
   // so the cost overlay also paints a generation timeline by per-step latency.
   let max=0; const vals=new Map();
@@ -645,6 +652,41 @@ function showPanel(d){
   if (d.diff && d.diff !== "same")
     row(rows,"diff", d.diff + (d.diff_detail ? " · "+d.diff_detail : ""));
   pbody.appendChild(rows);
+  // ---- per-head attention stats table ----------------------------------------
+  const _ah = (d.meta||{}).attn_heads;
+  if (_ah && _ah.length){
+    const tbl=document.createElement("table");
+    tbl.style.cssText="width:100%;border-collapse:collapse;margin-top:12px;font-size:10.5px;";
+    const hdr=tbl.insertRow(); hdr.style.color="var(--ink-dim)";
+    ["head","entropy","dist","%last"].forEach(h=>{
+      const th=document.createElement("th"); th.textContent=h;
+      th.style.cssText="text-align:right;padding:2px 5px;font-weight:normal;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid var(--hair);";
+      if(h==="head") th.style.textAlign="left"; hdr.appendChild(th);
+    });
+    _ah.forEach((head,i)=>{
+      const r=tbl.insertRow(); r.style.color="var(--ink)";
+      const vals=[(i).toString(), typeof head.entropy==="number"?head.entropy.toFixed(3):"–",
+                  typeof head.dist==="number"?head.dist.toFixed(3):"–",
+                  typeof head.last==="number"?(head.last*100).toFixed(1)+"%":"–"];
+      vals.forEach((v,j)=>{
+        const td=r.insertCell(); td.textContent=v;
+        td.style.cssText="text-align:right;padding:2px 5px;border-bottom:1px solid var(--hair);";
+        if(j===0) td.style.textAlign="left";
+      });
+    });
+    pbody.appendChild(tbl);
+  }
+  // ---- KV cache info ---------------------------------------------------------
+  const _kv = (d.meta||{}).kv_cache;
+  if (_kv){
+    const kvdiv=document.createElement("div");
+    kvdiv.style.cssText="margin-top:10px;font-size:10.5px;color:var(--ink-dim);";
+    const kvrows=document.createElement("div"); kvrows.className="rows";
+    if(typeof _kv.layers==="number") row(kvrows,"kv layers",_kv.layers);
+    if(_kv.shape) row(kvrows,"kv shape",Array.isArray(_kv.shape)?_kv.shape.join("×"):String(_kv.shape));
+    if(typeof _kv.seq==="number") row(kvrows,"kv seq",_kv.seq);
+    kvdiv.appendChild(kvrows); pbody.appendChild(kvdiv);
+  }
   if (d.loc){
     const loc=document.createElement("div"); loc.className="loc";
     loc.textContent="↳ "+d.loc.file.split("/").pop()+":"+d.loc.line;
@@ -731,12 +773,36 @@ function clearRole(){ cy.nodes().forEach(n=>n.removeData("rolecolor")); roleOn=f
   const b=document.getElementById("btn-role"); if(b) b.classList.remove("on"); }
 function applyRole(){
   if(typeof clearCost==="function") clearCost();   // role + cost are exclusive lenses
+  if(typeof clearAttn==="function") clearAttn();   // role + attention are exclusive lenses
   const sel=document.getElementById("cost-by"); if(sel) sel.value="";
   cy.nodes().forEach(n=>{ const r=n.data("role"); if(r && ROLE_COLORS[r]) n.data("rolecolor",ROLE_COLORS[r]); });
   roleOn=true; renderLegend("role");
 }
 const _broll=document.getElementById("btn-role");
 if(_broll) _broll.onclick=()=>{ roleOn ? clearRole() : applyRole(); _broll.classList.toggle("on",roleOn); };
+
+// ---- attention entropy overlay: color nodes cool->hot by mean per-head entropy --
+// Mirrors the role lens: toggle btn-attention, mutual-exclusive with role + cost.
+let attnOn=false;
+function clearAttn(){ cy.nodes().forEach(n=>n.removeData("attncolor")); attnOn=false;
+  const b=document.getElementById("btn-attention"); if(b) b.classList.remove("on"); }
+function applyAttn(){
+  if(typeof clearCost==="function") clearCost();   // mutually exclusive with cost
+  const sel=document.getElementById("cost-by"); if(sel) sel.value="";
+  if(typeof clearRole==="function") clearRole();   // mutually exclusive with role
+  let max=0; const vals=new Map();
+  cy.nodes().forEach(n=>{
+    const ah=n.data("meta") && n.data("meta").attn_heads;
+    if(!ah || !ah.length) return;
+    const mean=ah.reduce((s,h)=>s+(typeof h.entropy==="number"?h.entropy:0),0)/ah.length;
+    vals.set(n.id(), mean); if(mean>max) max=mean;
+  });
+  if(max<=0) return;
+  vals.forEach((v,id)=>{ cy.getElementById(id).data("attncolor",_heat(v/max)); });
+  attnOn=true;
+}
+const _battn=document.getElementById("btn-attention");
+if(_battn) _battn.onclick=()=>{ attnOn ? clearAttn() : applyAttn(); _battn.classList.toggle("on",attnOn); };
 
 // ---- mismatch warnings: pill + collapsible list, click to focus the edge ----
 (function(){
