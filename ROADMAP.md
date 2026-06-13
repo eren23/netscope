@@ -137,9 +137,10 @@ Design rules for the LLM layer:
 - **`scope=` capture API** (isolation Level 2): `with netscope.graph(scope=model.layers[2])`
   — record only a subtree, pure-library.
 - **Click-to-focus** (isolation Level 1): instant subtree focus in the graph, no re-run.
-- **Deeper LLM-specific views:** attention-head maps (needs attention *weights* — an
-  opt-in value capture), KV-cache shapes + a generation-step timeline (need
-  multi-forward capture) — ties straight back to sfumato.
+- ✅ **Deeper LLM-specific views:** attention-head maps (opt-in `capture={"attention"}`
+  → per-head entropy/dist/last scalars + `⊕ attention` overlay) and KV-cache shapes
+  + generation-step timeline (`capture={"kv_cache"}` → `meta.kv_cache`, `timeline()`
+  gains `kv_seq`). Env override: `NETSCOPE_CAPTURE=attention,kv_cache`.
 
 ## Later / bigger bets
 
