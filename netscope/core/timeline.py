@@ -20,9 +20,11 @@ def _descendant_ids(graph, root_id) -> list:
 def timeline(graph) -> list:
     """Ordered per-step summary of a generation trace.
 
-    Returns a list of ``{step, label, time_ms, modules, out_shape}`` sorted by step
-    index; empty if the trace has no ``netscope.step()`` markers. ``out_shape`` is
-    the step's final sub-call output (watch its sequence axis grow per decode step).
+    Returns a list of ``{step, label, time_ms, modules, out_shape, kv_seq}`` sorted
+    by step index; empty if the trace has no ``netscope.step()`` markers.
+    ``out_shape`` is the step's final sub-call output (watch its sequence axis grow
+    per decode step). ``kv_seq`` is the KV-cache sequence length for that step, or
+    ``None`` if no ``kv_cache`` meta was recorded.
     """
     nodes = {n["id"]: n for n in graph.nodes()}
     steps = []
@@ -41,12 +43,18 @@ def timeline(graph) -> list:
             1 for did in _descendant_ids(graph, n["id"])
             if (nodes.get(did) or {}).get("kind") in ("module", "op", "model")
         )
+        kv_seq = None
+        for did in _descendant_ids(graph, n["id"]):
+            kv = ((nodes.get(did) or {}).get("meta") or {}).get("kv_cache")
+            if kv and kv.get("seq") is not None:
+                kv_seq = kv["seq"]          # last one wins (deepest decode call)
         steps.append({
             "step": attrs["step"],
             "label": n.get("name"),
             "time_ms": (n.get("meta") or {}).get("time_ms"),
             "modules": modules,
             "out_shape": out_shape,
+            "kv_seq": kv_seq,
         })
     # group by type then value, so a stray non-int step label can't raise a
     # TypeError comparing str vs int (real step markers are always ints).

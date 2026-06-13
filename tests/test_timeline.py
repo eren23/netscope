@@ -65,3 +65,16 @@ def test_custom_step_label():
             model(torch.randint(0, 32, (1, 3)))
     tl = netscope.timeline(g)
     assert tl[0]["label"] == "prefill" and tl[0]["step"] == 0
+
+
+from netscope.core.ir import NVGraph
+
+
+def test_timeline_surfaces_kv_seq():
+    g = NVGraph(name="gen")
+    g.add_node("s0", kind="stage", name="step 0", attrs={"step": 0})
+    g.add_node("m0", kind="model", name="decoder", parent="s0",
+               meta={"out_shape": [1, 1, 32000], "kv_cache": {"layers": 2, "shape": [1, 8, 6, 64], "seq": 6}})
+    from netscope.core.timeline import timeline
+    (row,) = timeline(g)
+    assert row["step"] == 0 and row["kv_seq"] == 6

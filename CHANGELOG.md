@@ -5,6 +5,21 @@ Nothing is on PyPI yet — the first published release is pending.
 
 ## [Unreleased]
 
+### Added
+- **Deeper LLM views** — opt-in `capture={"attention", "kv_cache"}` knob on
+  `netscope.graph()` (env override: `NETSCOPE_CAPTURE=attention,kv_cache`):
+  - `"kv_cache"`: KV-cache *shapes* surfaced on each module node
+    (`meta.kv_cache = {layers, shape, seq}`); `netscope.timeline()` gains a
+    `kv_seq` field per step so you can watch the cache grow across decode steps.
+  - `"attention"`: attention weights captured transiently and reduced to
+    per-head scalars (`meta.attn_heads = [{entropy, dist, last}, ...]`).
+    The HTML graph gains an `⊕ attention` overlay (nodes colored by mean
+    entropy) and a per-head table in the node detail panel. For HF models
+    `output_attentions=True` is requested automatically while capturing.
+  - Memory note: attention → per-head scalars only; KV → shapes only; raw
+    tensors are never retained in either mode.
+  - The default trace is unchanged — metadata-only, zero-retention, ~zero overhead.
+
 ## [0.1.5] — 2026-06-07
 
 ### Added

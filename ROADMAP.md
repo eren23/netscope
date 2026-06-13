@@ -41,7 +41,7 @@ Bring the trace's real shapes + mismatch warnings onto the line, in the editor,
 without leaving the file. Ordered so each step is shippable and the cheap,
 high-impact, LLM-free wins come first.
 
-### M0 (0.1.1) — `loc` on every traced node *(keystone)*
+### M0 (0.1.1) — `loc` on every traced node *(keystone)* ✅
 Runtime module nodes don't carry a source location today, so the editor can't map
 a node back to a line. New `netscope/static/module_loc.py` scans the model's
 defining file (`self.x = nn.Conv2d(...)`, `Sequential`/`ModuleList` index naming)
@@ -49,7 +49,7 @@ to map each `meta.qualname` → `{file, line}`; the torch hook sets `loc` from i
 Pure-AST, best-effort, never raises. **Unlocks inline hints, squiggles, AND fixes
 click-to-source at once.**
 
-### M1 (0.1.2) — inline shape hints + mismatch squiggles *(the headline)*
+### M1 (0.1.2) — inline shape hints + mismatch squiggles *(the headline)* ✅
 Pure extension/TS on top of M0, no LLM:
 - **Inline shape hints (InlayHints).** Each layer's real `out_shape` as faint
   end-of-line ghost text, from the last trace.
@@ -57,7 +57,7 @@ Pure extension/TS on top of M0, no LLM:
   (`checks.py`) rendered as red underlines on the offending line, not only in the
   graph.
 
-### M2 (0.1.3) — declared-dim pre-check, no run required
+### M2 (0.1.3) — declared-dim pre-check, no run required ✅
 Extend the static AST producer to read `nn.Linear(in, out)` / `nn.Conv2d(...)`
 literal dims + `forward` call order and flag an obvious wiring clash *before* a
 single forward runs. Same `warnings` channel + diagnostics path as M1, tagged
@@ -137,9 +137,10 @@ Design rules for the LLM layer:
 - **`scope=` capture API** (isolation Level 2): `with netscope.graph(scope=model.layers[2])`
   — record only a subtree, pure-library.
 - **Click-to-focus** (isolation Level 1): instant subtree focus in the graph, no re-run.
-- **Deeper LLM-specific views:** attention-head maps (needs attention *weights* — an
-  opt-in value capture), KV-cache shapes + a generation-step timeline (need
-  multi-forward capture) — ties straight back to sfumato.
+- ✅ **Deeper LLM-specific views:** attention-head maps (opt-in `capture={"attention"}`
+  → per-head entropy/dist/last scalars + `⊕ attention` overlay) and KV-cache shapes
+  + generation-step timeline (`capture={"kv_cache"}` → `meta.kv_cache`, `timeline()`
+  gains `kv_seq`). Env override: `NETSCOPE_CAPTURE=attention,kv_cache`.
 
 ## Later / bigger bets
 

@@ -51,6 +51,10 @@ netscope/
 extension/     the TypeScript VSCode/Cursor extension (a thin consumer)
 ```
 
+**Adding a framework** (JAX/Flax, Keras, …)? The IR, capture session, and sinks are
+framework-neutral; a new framework plugs in as one adapter under `instrument/`
+without touching core. See [docs/extending-frameworks.md](docs/extending-frameworks.md).
+
 ## Two sync rules (CI-worthy, please don't break)
 
 1. **The renderer is authored once.** Edit `netscope/web/template.html`, then copy
@@ -65,7 +69,8 @@ extension/     the TypeScript VSCode/Cursor extension (a thin consumer)
 
 ## Conventions
 
-- **Python ≥ 3.9** — start modules with `from __future__ import annotations`.
+- **Python ≥ 3.10** — modern typing syntax (`X | None`, builtin generics like
+  `list[int]`) is used directly; no `from __future__ import annotations` needed.
 - **Tracing stays metadata-only and zero-overhead** outside a session — the
   capture-once / no-tensor-retention guarantees are tested (`tests/test_overhead.py`),
   keep them green.

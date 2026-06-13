@@ -101,6 +101,46 @@ def _act_bytes(x) -> Optional[int]:
         return None
 
 
+def _kv_cache_shape(output) -> Optional[dict]:
+    """Shape summary of a KV cache found in a module output — metadata only, no
+    tensor retained. Handles HF's legacy tuple-of-(k,v)-per-layer and v5 Cache
+    objects. Returns {layers, shape:[b,heads,seq,head_dim], seq} or None."""
+    pkv = None
+    if isinstance(output, dict):
+        pkv = output.get("past_key_values")
+    else:
+        pkv = getattr(output, "past_key_values", None)
+    if pkv is None:
+        return None
+    try:
+        # v5 Cache object: a list of per-layer key tensors
+        key_cache = getattr(pkv, "key_cache", None)
+        if key_cache:
+            k0 = key_cache[0]
+            shape = list(k0.shape)
+            return {"layers": len(key_cache), "shape": shape, "seq": int(shape[-2])}
+        # legacy: ((k, v), (k, v), ...)
+        if isinstance(pkv, (tuple, list)) and pkv and isinstance(pkv[0], (tuple, list)):
+            k0 = pkv[0][0]
+            shape = list(k0.shape)
+            return {"layers": len(pkv), "shape": shape, "seq": int(shape[-2])}
+    except Exception:
+        return None
+    return None
+
+
+def _attention_weights(output):
+    """First tensor in `output` that looks like attention weights: 4-D with equal
+    last two dims ([batch, heads, q, k] with q==k). None if absent. Heuristic —
+    best-effort; netscope requests output_attentions on HF models (see
+    transformers_hf). The caller must drop the return value right after reducing
+    it (we store per-head stats, never the tensor)."""
+    for t in _iter_tensors(output):
+        if _is_tensor(t) and t.dim() == 4 and t.shape[-1] == t.shape[-2]:
+            return t
+    return None
+
+
 def _first_tensor(obj):
     """The first tensor reachable in obj (descending dict/tuple/list), or None.
     Used to read dtype/device off a module's representative input/output."""
@@ -230,7 +270,7 @@ class TorchForwardInstrumentor:
                     if target is not None:
                         extra.append(_attach_isolation_capture(cap, target, isolate_target))
             qualname = id2name.get(id(module))
-            meta = {"params": own_params(module)}
+            meta: dict[str, object] = {"params": own_params(module)}
             pbytes = own_param_bytes(module)
             if pbytes:
                 meta["param_bytes"] = pbytes   # free: count × dtype size, for the memory overlay
@@ -287,7 +327,7 @@ class TorchForwardInstrumentor:
             # reachable tensor so the node still shows a representative shape.
             out_t = output if _is_tensor(output) else _first_tensor(output)
             out_shape = _shape(out_t)
-            update = {}
+            update: dict[str, object] = {}
             if out_shape is not None:
                 update["out_shape"] = out_shape
             ab = _act_bytes(out_t)
@@ -302,6 +342,18 @@ class TorchForwardInstrumentor:
                 update["dtype"] = _dtype(out_t)
             if "device" not in cur_meta and _device(out_t) is not None:
                 update["device"] = _device(out_t)
+            if cap.wants("kv_cache"):
+                kv = _kv_cache_shape(output)
+                if kv is not None:
+                    update["kv_cache"] = kv
+            if cap.wants("attention"):
+                aw = _attention_weights(output)
+                if aw is not None:
+                    from netscope.enrich.attention import head_stats
+                    stats = head_stats(aw)
+                    if stats:
+                        update["attn_heads"] = stats
+                    del aw  # drop the tensor immediately — record stats, not values
             cap.close_span(handle, meta_update=update or None)
             for t in _iter_tensors(output):
                 try:
@@ -333,6 +385,14 @@ class TorchForwardInstrumentor:
 
                 warnings.warn(f"netscope: failed to remove a torch hook: {e}",
                               RuntimeWarning, stacklevel=2)
+
+    def inference_context(self):
+        """Guard for the isolation re-run: re-executing a module is a read-only
+        trace, not training, so do it under `no_grad` (no autograd graph). The
+        registry collects this so `core.capture` needn't import torch itself."""
+        import torch
+
+        return torch.no_grad()
 
 
 def register() -> None:
