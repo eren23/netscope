@@ -230,7 +230,7 @@ class TorchForwardInstrumentor:
                     if target is not None:
                         extra.append(_attach_isolation_capture(cap, target, isolate_target))
             qualname = id2name.get(id(module))
-            meta = {"params": own_params(module)}
+            meta: dict[str, object] = {"params": own_params(module)}
             pbytes = own_param_bytes(module)
             if pbytes:
                 meta["param_bytes"] = pbytes   # free: count × dtype size, for the memory overlay
@@ -287,7 +287,7 @@ class TorchForwardInstrumentor:
             # reachable tensor so the node still shows a representative shape.
             out_t = output if _is_tensor(output) else _first_tensor(output)
             out_shape = _shape(out_t)
-            update = {}
+            update: dict[str, object] = {}
             if out_shape is not None:
                 update["out_shape"] = out_shape
             ab = _act_bytes(out_t)

@@ -30,8 +30,8 @@ jobs:
         run: |
           ruff check netscope tests
           mypy
-      - name: Run the suite
-        run: pytest tests/ -q
+      - name: Run the suite (with coverage)
+        run: pytest tests/ -q --cov=netscope --cov-report=term-missing --cov-report=xml --cov-fail-under=80
 
   extension:
     name: extension (lint + tsc + unit + headless)

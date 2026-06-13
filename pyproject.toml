@@ -24,7 +24,7 @@ torch = ["torch>=2.0"]
 hf = ["transformers>=5"]
 flops = ["thop>=0.1.1"]
 otel = ["opentelemetry-api>=1.20"]
-dev = ["pytest>=7", "thop>=0.1.1", "ruff>=0.6", "mypy>=1.10", "vulture>=2.10"]
+dev = ["pytest>=7", "pytest-cov>=4", "thop>=0.1.1", "ruff>=0.6", "mypy>=1.10", "vulture>=2.10"]
 
 [project.scripts]
 netscope = "netscope.__main__:main"
@@ -76,3 +76,20 @@ files = ["netscope"]
 ignore_missing_imports = true
 warn_redundant_casts = true
 warn_unused_ignores = true
+# Check the bodies of un-annotated functions too — the instrumentation layer is
+# mostly untyped by design (it pokes dynamic framework objects), so this is where
+# the real type bugs hide. Kept on; full `strict` is a later goal.
+check_untyped_defs = true
+
+[tool.coverage.run]
+source = ["netscope"]
+# web/ is vendored HTML/JS, not Python — nothing to measure there.
+omit = ["netscope/web/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
