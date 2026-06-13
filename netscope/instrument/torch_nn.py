@@ -334,6 +334,14 @@ class TorchForwardInstrumentor:
                 warnings.warn(f"netscope: failed to remove a torch hook: {e}",
                               RuntimeWarning, stacklevel=2)
 
+    def inference_context(self):
+        """Guard for the isolation re-run: re-executing a module is a read-only
+        trace, not training, so do it under `no_grad` (no autograd graph). The
+        registry collects this so `core.capture` needn't import torch itself."""
+        import torch
+
+        return torch.no_grad()
+
 
 def register() -> None:
     registry.register_session_instrumentor(TorchForwardInstrumentor())

@@ -9,9 +9,12 @@ break a session — ``enter_session`` / ``exit_session`` swallow its exceptions.
 """
 from __future__ import annotations
 
+import contextlib
+
 import pytest
 
 from netscope.core import registry
+from netscope.core.registry import Instrumentor
 
 
 @pytest.fixture
@@ -96,3 +99,60 @@ def test_exit_swallows_a_bad_instrumentor(reg):
     reg.register_session_instrumentor(_BadExit())
     handles = reg.enter_session()
     reg.exit_session(handles)        # must not propagate — reaching the next line is the assertion
+
+
+def test_recorder_satisfies_the_instrumentor_protocol():
+    # the contract is structural (typing.Protocol): on_enter + on_exit is enough.
+    assert isinstance(_Recorder(), Instrumentor)
+
+
+def test_inference_context_is_noop_without_guards(reg):
+    reg.clear()
+    reg.register_session_instrumentor(_Recorder())   # provides no inference_context
+    with reg.inference_context():                    # must just pass through
+        pass
+
+
+def test_inference_context_enters_and_exits_provided_guards(reg):
+    reg.clear()
+    events = []
+
+    class _Guarded:
+        def on_enter(self):
+            return None
+
+        def on_exit(self, handle):
+            pass
+
+        def inference_context(self):
+            @contextlib.contextmanager
+            def _cm():
+                events.append("enter")
+                try:
+                    yield
+                finally:
+                    events.append("exit")
+            return _cm()
+
+    reg.register_session_instrumentor(_Guarded())
+    with reg.inference_context():
+        assert events == ["enter"]
+    assert events == ["enter", "exit"]
+
+
+def test_inference_context_survives_a_bad_guard(reg):
+    reg.clear()
+
+    class _BadGuard:
+        def on_enter(self):
+            return None
+
+        def on_exit(self, handle):
+            pass
+
+        def inference_context(self):
+            raise RuntimeError("guard construction blew up")
+
+    reg.register_session_instrumentor(_BadGuard())
+    with reg.inference_context():     # the raising guard is swallowed, not propagated
+        pass

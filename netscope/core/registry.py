@@ -7,13 +7,41 @@ notably torch's global per-module forward hooks — are only worth paying for
 ``enter_session()`` on entry and ``exit_session()`` on exit so the hooks exist
 only during capture (zero hooks => zero overhead otherwise).
 
-This is also the framework-extensibility seam: new frameworks register an
-instrumentor without touching core.
+This is also the framework-extensibility seam: a new framework implements the
+:class:`Instrumentor` contract and registers an instance via
+:func:`register_session_instrumentor` — no core file changes required. See
+``docs/extending-frameworks.md`` for a walkthrough using the torch adapter.
 """
-_session_instrumentors: list = []
+import contextlib
+from typing import Iterator, Protocol, runtime_checkable
 
 
-def register_session_instrumentor(inst) -> None:
+@runtime_checkable
+class Instrumentor(Protocol):
+    """What a session-scoped framework adapter must provide.
+
+    ``on_enter`` installs the framework's tracing hooks when a capture session
+    opens and returns an opaque *handle* (anything — a tuple of hook handles, a
+    list, …); that same handle is passed back to ``on_exit`` to tear them down.
+    Both run inside ``try/except`` (see :func:`enter_session` /
+    :func:`exit_session`), so a misbehaving adapter degrades to "no trace from
+    this framework" rather than breaking the user's program.
+
+    Optional — not part of the required Protocol so frameworks that need no guard
+    simply omit it: an adapter may also define ``inference_context(self)`` returning
+    a context manager (e.g. ``torch.no_grad()``). The isolation re-run wraps the
+    re-executed module in the combined guard collected by :func:`inference_context`.
+    """
+
+    def on_enter(self) -> object: ...
+
+    def on_exit(self, handle: object, /) -> None: ...
+
+
+_session_instrumentors: "list[Instrumentor]" = []
+
+
+def register_session_instrumentor(inst: Instrumentor) -> None:
     """Register once per instrumentor type (idempotent)."""
     if any(type(i) is type(inst) for i in _session_instrumentors):
         return
@@ -41,3 +69,26 @@ def exit_session(handles) -> None:
             inst.on_exit(handle)
         except Exception:
             pass
+
+
+@contextlib.contextmanager
+def inference_context() -> Iterator[None]:
+    """Combined "inference mode" guard contributed by the registered instrumentors
+    (e.g. torch's ``no_grad``), used for the isolation re-run so the focused
+    re-execution doesn't build autograd graphs. A no-op when no adapter provides
+    one — and for the no-framework case. Best-effort: never raises."""
+    with contextlib.ExitStack() as stack:
+        for inst in _session_instrumentors:
+            make_guard = getattr(inst, "inference_context", None)
+            if make_guard is None:
+                continue
+            try:
+                cm = make_guard()
+            except Exception:
+                cm = None
+            if cm is not None:
+                try:
+                    stack.enter_context(cm)
+                except Exception:
+                    pass
+        yield

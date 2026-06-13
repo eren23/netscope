@@ -140,9 +140,9 @@ def _maybe_run_isolated(cap: "Capture") -> None:
     try:
         with graph(f"isolate:{name}") as ig:
             try:
-                import torch
-
-                with torch.no_grad():
+                # framework-neutral: the active instrumentor(s) supply the guard
+                # (torch -> no_grad); no-op if none do. Keeps torch out of core.
+                with registry.inference_context():
                     target(*args, **kwargs)
             except Exception:
                 pass  # a kwarg-heavy / stateful module may not re-run cleanly

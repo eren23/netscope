@@ -51,6 +51,10 @@ netscope/
 extension/     the TypeScript VSCode/Cursor extension (a thin consumer)
 ```
 
+**Adding a framework** (JAX/Flax, Keras, …)? The IR, capture session, and sinks are
+framework-neutral; a new framework plugs in as one adapter under `instrument/`
+without touching core. See [docs/extending-frameworks.md](docs/extending-frameworks.md).
+
 ## Two sync rules (CI-worthy, please don't break)
 
 1. **The renderer is authored once.** Edit `netscope/web/template.html`, then copy
