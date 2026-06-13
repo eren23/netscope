@@ -9,11 +9,14 @@ hooks, which are two separate callbacks and so cannot use a `with` block).
 import contextlib
 import itertools
 import os
-from typing import Iterator, Optional
+import warnings
+from typing import Iterable, Iterator, Optional
 
 from netscope.core import context as ctx
 from netscope.core import registry
 from netscope.core.ir import NVGraph
+
+_VALID_CAPTURE: frozenset[str] = frozenset({"attention", "kv_cache"})
 
 
 class SpanHandle:
@@ -25,12 +28,19 @@ class SpanHandle:
 
 
 class Capture:
-    def __init__(self, name: str = "", profile: bool = False) -> None:
+    def __init__(self, name: str = "", profile: bool = False,
+                 capture: frozenset[str] | None = None) -> None:
         self.graph = NVGraph(name=name)
         self._counter = itertools.count()
         # opt-in wall-time measurement. Read by the torch hook; off by default so
         # the steady-state trace stays metadata-only and ~zero overhead.
         self.profile = profile
+        # opt-in extra capture (e.g. "attention", "kv_cache"). Empty by default ->
+        # the steady-state trace stays metadata-only and zero-retention.
+        self.capture: frozenset[str] = capture or frozenset()
+
+    def wants(self, flag: str) -> bool:
+        return flag in self.capture
 
     def _new_id(self, name: str) -> str:
         return f"{name}#{next(self._counter)}"
@@ -78,7 +88,8 @@ class Capture:
 
 
 @contextlib.contextmanager
-def graph(name: str = "", *, profile: bool = False) -> Iterator[NVGraph]:
+def graph(name: str = "", *, profile: bool = False,
+          capture: "Iterable[str] | None" = None) -> Iterator[NVGraph]:
     """Open a capture session. Yields the live NVGraph.
 
     profile=True additionally measures per-module wall-time (`meta.time_ms`); it's
@@ -103,7 +114,19 @@ def graph(name: str = "", *, profile: bool = False) -> Iterator[NVGraph]:
     # call — this is how the extension's "Run & Trace (profiled)" turns it on.
     if not profile and os.environ.get("NETSCOPE_PROFILE"):
         profile = True
-    cap = Capture(name, profile=profile)
+    flags: set[str] = set(capture or ())
+    env_cap = os.environ.get("NETSCOPE_CAPTURE")
+    if env_cap:
+        flags |= {f.strip() for f in env_cap.split(",") if f.strip()}
+    unknown = flags - _VALID_CAPTURE
+    if unknown:
+        warnings.warn(
+            f"netscope: ignoring unknown capture flag(s): {sorted(unknown)}; "
+            f"valid: {sorted(_VALID_CAPTURE)}",
+            RuntimeWarning, stacklevel=2,
+        )
+    flags &= _VALID_CAPTURE
+    cap = Capture(name, profile=profile, capture=frozenset(flags))
     token = ctx.set_capture(cap)
     stack_token = ctx.push_clean_parent_scope()   # fresh stack; restored on exit
     handles = registry.enter_session()
