@@ -1,5 +1,10 @@
 # netscope
 
+[![PyPI](https://img.shields.io/pypi/v/netscope)](https://pypi.org/project/netscope/)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/eren23.netscope?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=eren23.netscope)
+[![Python](https://img.shields.io/pypi/pyversions/netscope)](https://pypi.org/project/netscope/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 **Trace, visualize, and sanity-check neural-network pipelines as you build them.**
 
 `import netscope`, wrap a forward pass, and get an interactive graph of your
@@ -68,9 +73,10 @@ netscope captures the real run and turns it into a graph you can actually read.
 pip install netscope          # the engine + standalone HTML renderer (needs PyTorch)
 ```
 
-> First PyPI release pending — until it lands, install from a clone with
-> `pip install -e .`. The VSCode / Cursor extension lives in `extension/`; the
-> fastest way to *try* netscope with no editor is `python -m netscope.playground`.
+> The VSCode / Cursor extension lives in `extension/` — install it from the
+> [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=eren23.netscope)
+> or [Open VSX](https://open-vsx.org/extension/eren23/netscope) (Cursor / VSCodium).
+> The fastest way to *try* netscope with no editor is `python -m netscope.playground`.
 
 **Requirements:** Python ≥ 3.10 and **PyTorch** (install it for your platform
 first — it's intentionally not a hard dependency, since torch wheels are large and
@@ -308,7 +314,7 @@ so a graph is one self-contained file — works offline and inside locked-down w
 ```bash
 python3 -m venv .venv --system-site-packages
 .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest tests/          # 182 passed, 1 skipped (FLOPs: thop optional)
+.venv/bin/python -m pytest tests/          # 240 passed, 3 skipped (torchvision optional for a few integration tests)
 cd extension && npm run test:unit && npm run test:headless
 ```
 

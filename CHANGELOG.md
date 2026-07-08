@@ -1,9 +1,12 @@
 # Changelog
 
 Notable changes to netscope. Pre-1.0 and iterating, so 0.1.x minors add features.
-Nothing is on PyPI yet — the first published release is pending.
+**0.1.6 is the first published release** — 0.1.0–0.1.5 were internal only (this
+log records the full pre-1.0 history).
 
 ## [Unreleased]
+
+## [0.1.6] — 2026-07-08
 
 ### Added
 - **Deeper LLM views** — opt-in `capture={"attention", "kv_cache"}` knob on

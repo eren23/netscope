@@ -25,7 +25,7 @@ cannot trace on its own (it has no torch / no model classes). Publish the PyPI p
 
 ### Build
 ```bash
-cd /Users/eren/Documents/AI/network_visualizer_ext
+cd /Users/eren/Documents/AI/netscope-release
 rm -rf dist build *.egg-info
 python -m build          # produces dist/netscope-<version>-py3-none-any.whl + .tar.gz
 python -m twine check dist/*
@@ -66,7 +66,7 @@ re-uploading an existing version**, so always bump.
 
 ### Build the .vsix
 ```bash
-cd /Users/eren/Documents/AI/network_visualizer_ext/extension
+cd /Users/eren/Documents/AI/netscope-release/extension
 npm install
 npm run compile
 npx @vscode/vsce package      # produces netscope-<version>.vsix
