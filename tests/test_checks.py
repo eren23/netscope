@@ -205,3 +205,16 @@ def test_capture_attaches_warnings_to_graph_dict():
     d = g.to_dict()
     assert "warnings" in d
     assert any(w["kind"] == "shape_mismatch" for w in d["warnings"])
+
+
+def test_non_numeric_shape_is_silent_never_crashes():
+    # a symbolic / dynamic dim (None, SymInt-like, a string) can slip into a shape
+    # under torch.export etc. The checker must treat it as unknown and stay silent,
+    # not raise — the "conservative, no false alarms" contract on the show-errors path.
+    assert detect_mismatches(_edge_graph([4, None], [4, 16])) == []   # bad producer dim
+    assert detect_mismatches(_edge_graph([4, 8], [4, "x"])) == []      # bad consumer dim
+
+
+def test_rank1_shapes_are_not_flagged():
+    # a 1-D producer/consumer has no batch/feature split to reason about -> silent.
+    assert detect_mismatches(_edge_graph([8], [16])) == []

@@ -62,3 +62,29 @@ def test_count_flops_returns_none_on_failure():
             raise RuntimeError("nope")
 
     assert count_flops(Bad(), torch.randn(1, 4)) is None
+
+
+def test_own_param_bytes_scales_with_dtype():
+    """A half-precision layer reads as half the memory of its float32 twin, and a
+    container owns 0 bytes directly (recurse=False, no double-count)."""
+    from netscope.enrich.params import own_param_bytes
+
+    lin = nn.Linear(4, 10)                 # 40 weights + 10 bias = 50 params
+    assert own_param_bytes(lin) == 50 * 4          # float32 default -> 4 bytes/param
+    assert own_param_bytes(nn.Linear(4, 10).half()) == 50 * 2   # float16 -> half
+    assert own_param_bytes(nn.Sequential(nn.Linear(4, 10))) == 0  # container: nothing direct
+
+
+def test_params_never_raise_on_broken_module():
+    """The param helpers are always-on enrichment, so a module whose .parameters()
+    misbehaves must degrade to 0, never take down the trace."""
+    from netscope.enrich.params import own_params, own_param_bytes, total_params
+
+    class Boom:
+        def parameters(self, recurse=True):
+            raise RuntimeError("no params here")
+
+    b = Boom()
+    assert own_params(b) == 0
+    assert own_param_bytes(b) == 0
+    assert total_params(b) == 0

@@ -314,7 +314,7 @@ so a graph is one self-contained file — works offline and inside locked-down w
 ```bash
 python3 -m venv .venv --system-site-packages
 .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest tests/          # 240 passed, 3 skipped (torchvision optional for a few integration tests)
+.venv/bin/python -m pytest tests/          # 245 passed, 3 skipped (torchvision optional for a few integration tests)
 cd extension && npm run test:unit && npm run test:headless
 ```
 
