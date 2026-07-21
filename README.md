@@ -37,6 +37,8 @@ view in your browser (paste a model, watch it analyzed — trace / static / prof
 | ![shapes as you write](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/shapes.gif) | ![diff two model versions](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/diff.gif) |
 | **Profile by cost** — the fat layer glows red | **Color by role** — attention / MLP / norm |
 | ![profile cost heatmap](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/profile.gif) | ![color a transformer by role](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/roles.gif) |
+| **Watch it think** — attention focus per decode step | **Will it fit?** — predicted memory at target scale |
+| ![generation timeline, attention focus per step](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/gentl.gif) | ![predicted memory overlay](https://raw.githubusercontent.com/eren23/netscope/main/docs/video/willfit.gif) |
 
 **On real models** — paste it, get the graph (big models auto-fold to a readable
 top-level pipeline you can drill into):
@@ -203,7 +205,28 @@ python examples/profile_demo.py         # per-layer cost -> a heatmap
 python examples/roles_demo.py           # color a transformer by attention/MLP/norm
 python examples/generation_timeline_demo.py  # an autoregressive loop, step by step
 python examples/memory_demo.py          # will it fit? predict peak GPU memory + OOM
+python examples/showcase.py             # ALL of it: 6 real models -> a browsable gallery
 ```
+
+## Fix it, don't just find it
+
+A declared-dim clash has one mechanical fix — change the consumer's in-dim to
+what its producer emits. `netscope fix` proposes exactly that edit (AST-located,
+so only that argument changes), dry-run by default:
+
+```
+$ netscope fix model.py
+model.py:8  (head)
+  - self.head = nn.Linear(128, 10)
+  + self.head = nn.Linear(256, 10)
+
+1 fix(es) proposed — re-run with --apply to write them.
+
+$ netscope fix model.py --apply
+applied 1 fix(es); 0 mismatch(es) remain.
+```
+
+Deterministic and offline — no LLM, no key; ambiguous cases propose nothing.
 
 ## Optional hints
 

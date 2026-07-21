@@ -7,6 +7,14 @@ log records the full pre-1.0 history).
 ## [Unreleased]
 
 ### Added
+- **Showcase** — `python examples/showcase.py` traces 6 real architectures from
+  config (GPT-2 decode loop, Qwen3, SAM 3, RT-DETR, ResNet-18, YOLOv8n — no
+  weight downloads) and writes a browsable gallery: one interactive graph per
+  model with memory reports and the `netscope fix` transcript inlined. Two new
+  recorder scenes (`gentl`, `willfit`) + README clips demo the new features;
+  `tools/record_scene.mjs` can now drive served gallery pages, not just the
+  playground. Note: attention capture on transformers v5 needs
+  `attn_implementation="eager"` (SDPA cannot materialize attention weights).
 - **Watch your LLM think** — the generation timeline is now a visual strip under the
   graph: one cell per `netscope.step()`, colored by that step's mean **attention
   entropy** (focused = cool, diffuse = hot) — or by **KV-cache length** when

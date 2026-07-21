@@ -262,11 +262,68 @@ async function sceneSam3(p) {
   await sleep(3600);
 }
 
-const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile, roles: sceneRoles, playground: scenePlayground, resnet: sceneResnet, gpt2: sceneGpt2, mobilenet: sceneMobilenet, rtdetr: sceneRtdetr, yolo: sceneYolo, sam3: sceneSam3 };
+// --- gallery-page scenes -----------------------------------------------------
+// These drive a page from `python examples/showcase.py` (served locally, e.g.
+// `python -m http.server 8792` in the gallery dir) instead of the playground —
+// the recorded artifact IS the real showcase output. They declare their own
+// `url`, so main() skips the playground's nsReady handshake for them.
+const GALLERY = process.env.GALLERY_URL || 'http://localhost:8792';
+
+// standalone pages have no nsCaption hook; inject the same look-alike banner.
+async function gcap(p, text) {
+  await p.evaluate((text) => {
+    let el = document.getElementById('rec-cap');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'rec-cap';
+      el.style.cssText = 'position:fixed;left:50%;bottom:86px;transform:translateX(-50%);' +
+        'z-index:99;background:rgba(6,12,22,.92);border:1px solid #22d3ee55;color:#e8eef2;' +
+        'padding:10px 18px;border-radius:10px;font:500 15px ui-monospace,monospace;' +
+        'max-width:70%;text-align:center;';
+      document.body.appendChild(el);
+    }
+    el.textContent = text;
+  }, text);
+}
+
+async function sceneGentl(p) {
+  await gcap(p, 'A real GPT-2 decode, traced step by step — watch it think.');
+  await sleep(2600);
+  await gcap(p, 'Each cell = one decode step, colored by attention focus — entropy rises as context grows.');
+  await sleep(2600);
+  await p.evaluate(() => {                       // fly to a mid-generation step
+    const cells = document.querySelectorAll('#gen-timeline .tl-cell');
+    if (cells[3]) cells[3].click();
+  });
+  await sleep(2200);
+  await gcap(p, 'Click a step → fly to that decode pass; per-head entropy in the panel.');
+  await sleep(3000);
+}
+
+async function sceneWillfit(p) {
+  await gcap(p, 'Will it fit? One trace, extrapolated to batch 64.');
+  await sleep(2400);
+  await p.evaluate(() => {
+    const sel = document.getElementById('cost-by');
+    sel.value = 'pred_bytes';
+    sel.dispatchEvent(new Event('change'));
+  });
+  await sleep(1400);
+  await gcap(p, 'cost: predicted mem — the layer that dominates at the target scale glows red.');
+  await sleep(3000);
+  await gcap(p, 'netscope.memory(g, batch=1, seq=32768, vram="4GB") → the KV term, exact — and the crossover seq.');
+  await sleep(3400);
+}
+
+const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: sceneProfile, roles: sceneRoles, playground: scenePlayground, resnet: sceneResnet, gpt2: sceneGpt2, mobilenet: sceneMobilenet, rtdetr: sceneRtdetr, yolo: sceneYolo, sam3: sceneSam3,
+  gentl:   { url: `${GALLERY}/gpt2-generate.html`, run: sceneGentl },
+  willfit: { url: `${GALLERY}/gpt2-generate.html`, run: sceneWillfit } };
 
 (async () => {
-  const run = SCENES[scene];
-  if (!run) { console.error('unknown scene ' + scene); process.exit(2); }
+  const entry = SCENES[scene];
+  if (!entry) { console.error('unknown scene ' + scene); process.exit(2); }
+  const run = typeof entry === 'function' ? entry : entry.run;
+  const url = typeof entry === 'function' ? URL : entry.url;
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
     viewport: { width: 1280, height: 720 },
@@ -274,9 +331,11 @@ const SCENES = { bug: sceneBug, shapes: sceneShapes, diff: sceneDiff, profile: s
     deviceScaleFactor: 2,
   });
   const page = await ctx.newPage();
-  await page.goto(URL);
-  await page.waitForFunction(() => window.nsReady === true, { timeout: 10000 });
-  await page.evaluate(() => window.nsReset && window.nsReset());
+  await page.goto(url);
+  if (typeof entry === 'function') {             // playground scenes: wait for its hooks
+    await page.waitForFunction(() => window.nsReady === true, { timeout: 10000 });
+    await page.evaluate(() => window.nsReset && window.nsReset());
+  }
   await sleep(500);
   await run(page);
   await sleep(700);
