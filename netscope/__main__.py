@@ -1,6 +1,7 @@
 """`netscope <cmd>` / `python -m netscope <cmd>` — a thin dispatcher over the tools.
 
     netscope static   model.py            # static graph (declared-dim checks, no run)
+    netscope fix      model.py [--apply]   # propose/apply fixes for declared-dim clashes
     netscope playground [port]            # local live editor <-> graph
     netscope mcp                          # MCP server (JSON-RPC over stdio) for agents
     netscope diff     a.json b.json [...]  # diff two saved traces
@@ -11,7 +12,7 @@ netscope.static …` etc. keep working unchanged.
 """
 import sys
 
-_USAGE = "usage: netscope {static|playground|mcp|diff|views} ...\n"
+_USAGE = "usage: netscope {static|fix|playground|mcp|diff|views} ...\n"
 
 
 def main(argv=None) -> int:
@@ -19,6 +20,9 @@ def main(argv=None) -> int:
     cmd, rest = (argv[0], argv[1:]) if argv else ("", [])
     if cmd == "static":
         from netscope.static.cli import main as run
+        return run(rest)
+    if cmd == "fix":
+        from netscope.autofix import _main as run
         return run(rest)
     if cmd == "playground":
         from netscope.playground import main as run

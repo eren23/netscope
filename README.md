@@ -122,6 +122,10 @@ is kept, never tensors.
 - **Static analysis** — `python -m netscope.static yourfile.py` recovers the
   branch/vote structure **and** declared-dim wiring clashes from source *without
   running it* (a `torch.fx` fallback recovers real structure for traceable models).
+- **Self-healing shapes** — `netscope fix yourfile.py` doesn't just flag a dim
+  clash, it proposes the exact edit (change the consumer's in-dim to what its
+  producer emits) and, with `--apply`, writes it and re-checks. Deterministic and
+  offline — dry-run by default, and it only touches a clean, unambiguous clash.
 - **Isolate a part** — re-run just one submodule on its real input, alone.
 - **Scope a trace** — `netscope.graph(scope=model.layers[2])` records only that
   submodule's subtree; the full model still runs, you just get a focused graph.

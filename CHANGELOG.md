@@ -7,6 +7,13 @@ log records the full pre-1.0 history).
 ## [Unreleased]
 
 ### Added
+- **Self-healing shapes** — `netscope fix model.py` proposes the exact edit for a
+  declared-dim clash (change the consumer's in-dim to what its producer emits),
+  located precisely via the AST so only that argument changes; `--apply` writes it
+  and re-analyzes to confirm the clash is gone. Deterministic and offline (no LLM —
+  a clean dim clash has one mechanical fix), dry-run by default, conservative
+  (nothing proposed for ambiguous/non-literal cases). Library:
+  `netscope.autofix.propose_fixes(graph)` / `apply_fixes(fixes)`.
 - **Memory / OOM predictor** — `netscope.memory(g, batch=32, seq=8192, vram="24GB")`
   extrapolates the captured cost data to a target batch/seq and estimates peak GPU
   memory, flagging OOM and the crossover seq ("fits up to seq N"). Params and
