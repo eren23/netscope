@@ -269,6 +269,13 @@ class TorchForwardInstrumentor:
                     )
                     if target is not None:
                         extra.append(_attach_isolation_capture(cap, target, isolate_target))
+            # scope=: outside the chosen subtree, record nothing — but still push a
+            # sentinel so the paired post-hook stays balanced (it pops one item per
+            # module either way). The full forward runs; it's just not captured.
+            if not cap.in_scope(id(module)):
+                pending.append(None)
+                starts.append(None)
+                return
             qualname = id2name.get(id(module))
             meta: dict[str, object] = {"params": own_params(module)}
             pbytes = own_param_bytes(module)
@@ -322,6 +329,8 @@ class TorchForwardInstrumentor:
                 return
             handle = pending.pop()
             t0 = starts.pop() if starts else None
+            if handle is None:
+                return   # out-of-scope module (scope=): nothing was recorded in pre
             # out_shape from the output if it's a bare tensor; for a tuple/dict
             # output (MultiheadAttention, HF ModelOutput) fall back to the first
             # reachable tensor so the node still shows a representative shape.

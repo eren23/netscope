@@ -1,6 +1,9 @@
 # Design: tracing parts of a network in isolation
 
-**Status:** draft for review (no code yet)
+**Status:** partially shipped. Done: the shared module→qualname map (nodes carry
+`meta.qualname`), **Level 2** `scope=<module>` capture, and **Level 3**
+isolate-on-rerun (`NETSCOPE_ISOLATE`). Remaining: **Level 1** click-to-focus
+(webview), the `include=/exclude=` name-pattern variants of Level 2, and Level 4.
 **Date:** 2026-05-31
 **Author:** netscope
 

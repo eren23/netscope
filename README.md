@@ -123,6 +123,8 @@ is kept, never tensors.
   branch/vote structure **and** declared-dim wiring clashes from source *without
   running it* (a `torch.fx` fallback recovers real structure for traceable models).
 - **Isolate a part** — re-run just one submodule on its real input, alone.
+- **Scope a trace** — `netscope.graph(scope=model.layers[2])` records only that
+  submodule's subtree; the full model still runs, you just get a focused graph.
 - **Click-to-source** — every node carries `file:line`.
 - **Trace diffing** — `netscope.diff(before, after)`: edit a model, re-trace, and
   see exactly what changed — nodes added (green) / removed, plus shape + param

@@ -29,7 +29,8 @@ class SpanHandle:
 
 class Capture:
     def __init__(self, name: str = "", profile: bool = False,
-                 capture: frozenset[str] | None = None) -> None:
+                 capture: frozenset[str] | None = None,
+                 scope_ids: frozenset[int] | None = None) -> None:
         self.graph = NVGraph(name=name)
         self._counter = itertools.count()
         # opt-in wall-time measurement. Read by the torch hook; off by default so
@@ -38,9 +39,17 @@ class Capture:
         # opt-in extra capture (e.g. "attention", "kv_cache"). Empty by default ->
         # the steady-state trace stays metadata-only and zero-retention.
         self.capture: frozenset[str] = capture or frozenset()
+        # opt-in subtree scoping: id()s of the modules to record (scope.modules()).
+        # None -> record every module (the default full trace).
+        self.scope_ids: frozenset[int] | None = scope_ids
 
     def wants(self, flag: str) -> bool:
         return flag in self.capture
+
+    def in_scope(self, module_id: int) -> bool:
+        """Whether a module (by id()) should be recorded. Always True when no
+        scope was set; otherwise only the scoped subtree's modules qualify."""
+        return self.scope_ids is None or module_id in self.scope_ids
 
     def _new_id(self, name: str) -> str:
         return f"{name}#{next(self._counter)}"
@@ -89,13 +98,19 @@ class Capture:
 
 @contextlib.contextmanager
 def graph(name: str = "", *, profile: bool = False,
-          capture: "Iterable[str] | None" = None) -> Iterator[NVGraph]:
+          capture: "Iterable[str] | None" = None,
+          scope: object = None) -> Iterator[NVGraph]:
     """Open a capture session. Yields the live NVGraph.
 
     profile=True additionally measures per-module wall-time (`meta.time_ms`); it's
     opt-in because timing has real overhead, whereas the default trace is
     metadata-only. Activation/param byte counts ride on every trace regardless
     (they're free — derived from shapes already captured).
+
+    scope=<nn.Module> records ONLY that module and its descendants
+    (`scope.modules()`): the full forward still runs, but everything outside the
+    subtree is skipped, so you get a focused graph of just the part you care about
+    (`with netscope.graph(scope=model.layers[2]): model(x)`).
 
     Sessions do not nest: a second `graph()` opened inside an active one would
     double-install the global torch hooks, so every module would be captured
@@ -126,7 +141,16 @@ def graph(name: str = "", *, profile: bool = False,
             RuntimeWarning, stacklevel=2,
         )
     flags &= _VALID_CAPTURE
-    cap = Capture(name, profile=profile, capture=frozenset(flags))
+    scope_ids: frozenset[int] | None = None
+    if scope is not None:
+        modules_fn = getattr(scope, "modules", None)
+        if not callable(modules_fn):
+            raise TypeError(
+                "netscope.graph(scope=...) expects an nn.Module (something with "
+                f".modules()); got {type(scope).__name__}"
+            )
+        scope_ids = frozenset(id(m) for m in modules_fn())
+    cap = Capture(name, profile=profile, capture=frozenset(flags), scope_ids=scope_ids)
     token = ctx.set_capture(cap)
     stack_token = ctx.push_clean_parent_scope()   # fresh stack; restored on exit
     handles = registry.enter_session()

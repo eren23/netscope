@@ -6,6 +6,18 @@ log records the full pre-1.0 history).
 
 ## [Unreleased]
 
+### Added
+- **`scope=` capture** — `netscope.graph(scope=model.layers[2])` records only that
+  module and its descendants (`scope.modules()`); the full forward still runs,
+  everything outside the subtree is skipped, so you get a focused graph of just
+  the part you care about. Pure library, no editor. The default full trace is
+  unchanged (`scope=None`).
+
+### Fixed
+- **HF generate wrapper** is registered exactly once even if the module is
+  re-imported (guarded on `GenerationMixin` itself, not a module-level flag), so a
+  re-import can't stack the wrapper and emit a duplicate `.generate` node.
+
 ## [0.1.6] — 2026-07-08
 
 ### Added
