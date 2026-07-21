@@ -13,7 +13,9 @@ log records the full pre-1.0 history).
   KV-cache are exact (the KV term dominates an LLM at long context — the usual real
   OOM cause); activations are a linear estimate, flagged where the batch axis can't
   be identified. `overhead`/`reserve_gb` calibration knobs for real allocator slack.
-  Pure library, offline, no key. `report.to_text()` prints the breakdown.
+  Pure library, offline, no key. `report.to_text()` prints the breakdown, and
+  `memory(g, annotate=True)` stamps `meta.pred_bytes` so the graph's
+  `cost: predicted mem` overlay glows the layer that dominates at the target scale.
 - **`scope=` capture** — `netscope.graph(scope=model.layers[2])` records only that
   module and its descendants (`scope.modules()`); the full forward still runs,
   everything outside the subtree is skipped, so you get a focused graph of just

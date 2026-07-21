@@ -136,7 +136,8 @@ is kept, never tensors.
   extrapolates that cost data to a target batch/seq and estimates **peak GPU
   memory**, flagging OOM and the longest context that still fits. Params + KV-cache
   are exact (KV dominates an LLM at long context); a calibration knob covers real
-  allocator slack. Offline, no key — `report.to_text()` prints the breakdown.
+  allocator slack. Offline, no key — `report.to_text()` prints the breakdown, and
+  `annotate=True` lights up the scale-dominant layer in the graph's cost overlay.
 - **Role lens** — color a model by architectural role (attention / MLP / norm /
   embedding) so a transformer's structure reads at a glance; `netscope.roles(g)`
   returns the breakdown.

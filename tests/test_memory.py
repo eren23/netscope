@@ -122,3 +122,13 @@ def test_to_text_summarizes_the_verdict():
     assert isinstance(txt, str) and txt
     assert "peak" in txt.lower() and "kv" in txt.lower()
     assert "OOM" in txt                     # this config exceeds a 1 GiB budget
+
+
+def test_annotate_stamps_pred_bytes_for_the_overlay():
+    model = nn.Sequential(nn.Linear(4, 64), nn.ReLU(), nn.Linear(64, 4))
+    with netscope.graph("m") as g:
+        model(torch.randn(2, 4))            # traced at batch 2
+    netscope.memory(g, batch=16, annotate=True)   # 8× batch -> stamp meta.pred_bytes
+    pred = [p for p in ((n.get("meta") or {}).get("pred_bytes") for n in g.nodes()) if p]
+    # the widest layer's predicted activation is its traced act_bytes × 8
+    assert pred and max(pred) == 2 * 64 * 4 * 8

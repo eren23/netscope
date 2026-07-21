@@ -175,6 +175,7 @@ def _scaled_activations(nodes, b0, batch, s0, seq) -> list:
                     if ax == s0:
                         factor *= seq / s0
         out.append({
+            "id": n.get("id"),
             "qualname": meta.get("qualname") or n.get("name", ""),
             "act_at_target": int(round(act * factor)),
             "uncertain": uncertain,
@@ -185,7 +186,8 @@ def _scaled_activations(nodes, b0, batch, s0, seq) -> list:
 
 def memory(graph, *, batch: "int | None" = None, seq: "int | None" = None,
            vram=None, vram_gb=None, top_k: int = 2, overhead: float = 1.1,
-           reserve_gb: float = 1.0, traced_batch: "int | None" = None,
+           reserve_gb: float = 1.0, annotate: bool = False,
+           traced_batch: "int | None" = None,
            traced_seq: "int | None" = None) -> MemoryReport:
     """Estimate peak GPU memory for a traced graph at a target batch/seq, and flag
     OOM against a VRAM budget — "will it fit?".
@@ -195,6 +197,10 @@ def memory(graph, *, batch: "int | None" = None, seq: "int | None" = None,
     paper sum can't see (~1–2 GB + ~10–20%). Defaults are a sane inference starting
     point — tune them to your setup. Pass ``vram="24GB"`` (or ``vram_gb=24``) to get
     an OOM verdict + the crossover seq (the longest context that still fits).
+
+    ``annotate=True`` writes each node's predicted activation bytes into its meta
+    (``meta.pred_bytes``) so the graph's ``cost: predicted mem`` overlay heatmaps
+    it — the layer that dominates at the target scale glows red in ``g.show()``.
     """
     nodes = graph.nodes()
     params = _sum_param_bytes(nodes)
@@ -210,6 +216,10 @@ def memory(graph, *, batch: "int | None" = None, seq: "int | None" = None,
         return int((params + kvb + ap) * overhead + reserve_bytes), by, ap, kvb
 
     peak, by_layer, act_peak, kv = peak_at(seq)
+    if annotate:
+        for row in by_layer:
+            if row.get("id") is not None:
+                graph.update_meta(row["id"], {"pred_bytes": row["act_at_target"]})
     components = {"params": params, "kv_cache": kv, "activations_peak": act_peak}
     vram_bytes = _parse_vram(vram, vram_gb)
     oom = vram_bytes is not None and peak > vram_bytes
