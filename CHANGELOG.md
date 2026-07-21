@@ -7,6 +7,13 @@ log records the full pre-1.0 history).
 ## [Unreleased]
 
 ### Added
+- **Watch your LLM think** — the generation timeline is now a visual strip under the
+  graph: one cell per `netscope.step()`, colored by that step's mean **attention
+  entropy** (focused = cool, diffuse = hot) — or by **KV-cache length** when
+  attention wasn't captured — with the value + `kv_seq` per cell. Click a step to
+  fly to that decode pass in the graph. `netscope.timeline(g)` gains an
+  `attn_entropy` field per step. Standalone HTML (`g.show()`); the strip stays
+  hidden when there are no step markers.
 - **Self-healing shapes** — `netscope fix model.py` proposes the exact edit for a
   declared-dim clash (change the consumer's in-dim to what its producer emits),
   located precisely via the AST so only that argument changes; `--apply` writes it

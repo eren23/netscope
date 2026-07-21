@@ -44,10 +44,18 @@ def timeline(graph) -> list:
             if (nodes.get(did) or {}).get("kind") in ("module", "op", "model")
         )
         kv_seq = None
+        entropies = []
         for did in _descendant_ids(graph, n["id"]):
-            kv = ((nodes.get(did) or {}).get("meta") or {}).get("kv_cache")
+            meta = (nodes.get(did) or {}).get("meta") or {}
+            kv = meta.get("kv_cache")
             if kv and kv.get("seq") is not None:
                 kv_seq = kv["seq"]          # last one wins (deepest decode call)
+            for h in meta.get("attn_heads") or ():
+                if h.get("entropy") is not None:
+                    entropies.append(h["entropy"])
+        # mean attention entropy this step (0 = laser-focused, high = diffuse) — the
+        # "how focused is the model right now" signal for the generation timeline.
+        attn_entropy = round(sum(entropies) / len(entropies), 4) if entropies else None
         steps.append({
             "step": attrs["step"],
             "label": n.get("name"),
@@ -55,6 +63,7 @@ def timeline(graph) -> list:
             "modules": modules,
             "out_shape": out_shape,
             "kv_seq": kv_seq,
+            "attn_entropy": attn_entropy,
         })
     # group by type then value, so a stray non-int step label can't raise a
     # TypeError comparing str vs int (real step markers are always ints).

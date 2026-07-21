@@ -412,6 +412,10 @@ function show(ctx: vscode.ExtensionContext, graph: NVGraph, title: string): void
   const html = tpl
     .replace("__NETSCOPE_VENDOR__", () => vendor)   // inline cytoscape etc.
     .replace("__NETSCOPE_ELEMENTS__", () => elements)
+    // the generation-timeline strip is a standalone-HTML feature for now; fill the
+    // placeholder with an empty list so the widget stays hidden in the webview
+    // (rather than shipping the literal placeholder and breaking the inline script).
+    .replace("__NETSCOPE_TIMELINE__", () => "[]")
     .replace(/__NETSCOPE_TITLE__/g, () => title.replace(/[<>&]/g, ""))
     // all libs are inlined -> webview needs no remote origin; nonce-only CSP.
     .replace(

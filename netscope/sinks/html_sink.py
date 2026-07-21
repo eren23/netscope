@@ -116,9 +116,12 @@ def to_html(g, title: Optional[str] = None) -> str:
     # the inlined <script> early and inject markup. `<\/` is identical JS. The
     # standalone HTML has no CSP to fall back on, so this is the real guard.
     elements = json.dumps(to_cytoscape(g)).replace("</", "<\\/")
+    from netscope.core.timeline import timeline as _timeline
+    tl = json.dumps(_timeline(g)).replace("</", "<\\/")   # generation-step dynamics
     return (
         tpl.replace("__NETSCOPE_VENDOR__", _vendor_scripts())
         .replace("__NETSCOPE_ELEMENTS__", elements)
+        .replace("__NETSCOPE_TIMELINE__", tl)
         .replace("__NETSCOPE_TITLE__", _html.escape(title))
     )
 

@@ -128,6 +128,17 @@
   .vselect:focus, .vselect:hover { border-color:var(--stage); }
   .hbtn.on { border-color:var(--stage); color:var(--stage); }
   #hud .live { margin-left:0; }
+  #gen-timeline { position:absolute; z-index:4; left:16px; right:16px; bottom:46px;
+    display:none; gap:4px; align-items:flex-end; overflow-x:auto; padding:6px 8px;
+    background:rgba(6,12,22,.74); border:1px solid #1e2c40; border-radius:10px;
+    backdrop-filter:blur(3px); }
+  #gen-timeline .tl-title { color:#7f9ab8; font:600 10px ui-monospace,monospace;
+    margin-right:8px; white-space:nowrap; align-self:center; }
+  #gen-timeline .tl-cell { flex:0 0 auto; min-width:30px; padding:4px 5px; border-radius:6px;
+    cursor:pointer; text-align:center; border:1px solid rgba(255,255,255,.08);
+    font:600 10px ui-monospace,monospace; color:#04121e; transition:transform .1s; }
+  #gen-timeline .tl-cell:hover { transform:translateY(-2px); }
+  #gen-timeline .tl-cell small { display:block; font-weight:500; opacity:.85; font-size:9px; }
 </style>
 </head>
 <body>
@@ -161,11 +172,14 @@
 <div id="legend"></div>
 <div class="hint">scroll · zoom &nbsp;|&nbsp; drag · pan &nbsp;|&nbsp; click · inspect &nbsp;|&nbsp; [+] · expand block</div>
 
+<div id="gen-timeline"></div>
+
 <div id="panel"><span class="pclose" id="pclose">×</span><div id="panel-body"></div></div>
 
 __NETSCOPE_VENDOR__
 <script>
 const NETSCOPE_ELEMENTS = __NETSCOPE_ELEMENTS__;
+const NETSCOPE_TIMELINE = __NETSCOPE_TIMELINE__;   // per-step gen dynamics (may be [])
 // brighter, more saturated accents (the muted originals read as a wireframe)
 const KIND = { pipeline:"#9db8d4", stage:"#2ee6ff", model:"#34f5a8", module:"#ffc233", op:"#cf8bff" };
 // leaf fills: a touch richer + warmer so chips feel solid, not flat
@@ -841,6 +855,49 @@ if(_battn) _battn.onclick=()=>{ attnOn ? clearAttn() : applyAttn(); _battn.class
   });
 
   pill.onclick = ()=> box.classList.toggle("show");
+})();
+
+// ---- generation timeline: watch attention focus + KV-cache growth across the
+// decode steps (netscope.step() markers). Colors each step by mean attention
+// entropy (focused=cool, diffuse=hot), or by KV-cache length when attention
+// wasn't captured. Click a step to fly to that decode pass in the graph.
+(function(){
+  const tl = Array.isArray(NETSCOPE_TIMELINE) ? NETSCOPE_TIMELINE : [];
+  const el = document.getElementById("gen-timeline");
+  if (!el || !tl.length) return;                  // no step markers -> stays hidden
+  const useAttn = tl.some(s=> typeof s.attn_entropy === "number");
+  const nums = tl.map(s=> useAttn ? s.attn_entropy : s.kv_seq).filter(v=> typeof v==="number");
+  const lo = nums.length ? Math.min(...nums) : 0, hi = nums.length ? Math.max(...nums) : 1;
+  const span = (hi - lo) || 1;
+  const title = document.createElement("span");
+  title.className = "tl-title";
+  title.textContent = useAttn ? "gen ▸ attention focus" : "gen ▸ KV cache";
+  el.appendChild(title);
+  tl.forEach(s=>{
+    const v = useAttn ? s.attn_entropy : s.kv_seq;
+    const cell = document.createElement("div");
+    cell.className = "tl-cell";
+    cell.style.background = (typeof v === "number") ? _heat((v - lo)/span) : "#1e2c40";
+    cell.appendChild(document.createTextNode("#" + s.step));
+    const sub = document.createElement("small");
+    sub.textContent = useAttn
+      ? (typeof s.attn_entropy === "number" ? s.attn_entropy.toFixed(2) : "·")
+      : (s.kv_seq != null ? "kv " + s.kv_seq : "·");
+    cell.appendChild(sub);
+    cell.title = "step " + s.step
+      + (s.kv_seq != null ? " · kv_seq " + s.kv_seq : "")
+      + (typeof s.attn_entropy === "number" ? " · entropy " + s.attn_entropy.toFixed(3) : "")
+      + (s.out_shape ? " · out " + JSON.stringify(s.out_shape) : "");
+    cell.onclick = ()=>{
+      const node = cy.nodes().filter(n=> ((n.data("attrs")||{}).step) === s.step);
+      if (node.nonempty()){
+        cy.animate({ fit: { eles: node, padding: 90 } }, { duration: 250 });
+        if (typeof showPanel === "function") showPanel(node[0].data());
+      }
+    };
+    el.appendChild(cell);
+  });
+  el.style.display = "flex";
 })();
 </script>
 </body>

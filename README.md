@@ -146,8 +146,10 @@ is kept, never tensors.
   embedding) so a transformer's structure reads at a glance; `netscope.roles(g)`
   returns the breakdown.
 - **Generation timeline** — wrap decode steps in `netscope.step()`;
-  `netscope.timeline(g)` returns the per-step sequence-growth + latency, and the
-  steps render as a left-to-right timeline you can color by per-step time.
+  `netscope.timeline(g)` returns per-step sequence-growth, latency, `kv_seq`, and
+  mean **attention entropy**. The graph shows a **generation strip** — one cell per
+  step, colored by attention focus (or KV-cache growth) — so you can *watch the
+  model think* across the decode; click a step to fly to that pass.
 
 …plus three optional layers on top — the in-editor experience needs **no key**;
 the LLM features are bring-your-own-key; everything works offline without them:

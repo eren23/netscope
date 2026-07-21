@@ -78,3 +78,29 @@ def test_timeline_surfaces_kv_seq():
     from netscope.core.timeline import timeline
     (row,) = timeline(g)
     assert row["step"] == 0 and row["kv_seq"] == 6
+
+
+def test_timeline_surfaces_attn_entropy():
+    from netscope.core.timeline import timeline
+    g = NVGraph(name="gen")
+    g.add_node("s0", kind="stage", name="step 0", attrs={"step": 0})
+    g.add_node("a0", kind="module", name="attn", parent="s0",
+               meta={"attn_heads": [{"entropy": 1.0, "dist": 1, "last": 0.5},
+                                    {"entropy": 2.0, "dist": 1, "last": 0.5}]})
+    g.add_node("s1", kind="stage", name="step 1", attrs={"step": 1})
+    g.add_node("m1", kind="module", name="lin", parent="s1", meta={"out_shape": [1, 4]})
+    a, b = timeline(g)
+    assert a["attn_entropy"] == 1.5      # mean of the two heads' entropy
+    assert b["attn_entropy"] is None     # a step with no attention captured
+
+
+def test_timeline_is_inlined_into_the_html():
+    from netscope.sinks.html_sink import to_html
+    g = NVGraph(name="gen")
+    g.add_node("s0", kind="stage", name="step 0", attrs={"step": 0})
+    g.add_node("a0", kind="module", name="attn", parent="s0",
+               meta={"attn_heads": [{"entropy": 1.2, "dist": 1, "last": 0.5}]})
+    html = to_html(g)
+    assert "__NETSCOPE_TIMELINE__" not in html    # placeholder filled
+    assert '"attn_entropy"' in html               # per-step data reaches the widget
+    assert 'id="gen-timeline"' in html            # the timeline strip is present
