@@ -34,7 +34,16 @@ def register() -> None:
         return
     try:
         import wrapt
+        from transformers.generation.utils import GenerationMixin
     except Exception:
+        return
+    # Idempotency that survives a module re-import: the _installed flag lives on
+    # THIS module object, but pytest (and some import setups) can load the module
+    # under two identities, each with _installed=False — which would stack the
+    # wrapper and emit a duplicate `.generate` node per call. Mark the patch target
+    # itself (a single process-wide class object) so a re-import can't double-wrap.
+    if getattr(GenerationMixin, "_netscope_generate_wrapped", False):
+        _installed = True
         return
 
     @wrapt.patch_function_wrapper("transformers.generation.utils", "GenerationMixin.generate")
@@ -59,4 +68,5 @@ def register() -> None:
                     cap.close_span(handle)
                 except Exception:
                     pass
+    GenerationMixin._netscope_generate_wrapped = True
     _installed = True

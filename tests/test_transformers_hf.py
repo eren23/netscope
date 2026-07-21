@@ -74,13 +74,11 @@ def test_generate_becomes_a_model_node_under_capture():
         with torch.no_grad():
             model.generate(ids, attention_mask=mask, max_new_tokens=2, do_sample=False)
 
-    # Contract: a generate() call is captured as a `model` node carrying the right
-    # name + meta. We don't pin the *count*: under pytest's cross-file import order
-    # the post-import hook can stack the wrapper more than once (harmless — a real
-    # single `import netscope` wraps generate exactly once), which would produce a
-    # node per wrap. Assert the properties, not the multiplicity.
+    # Exactly one model node per generate() call — the wrapper is registered once
+    # even if this module is re-imported (guarded on GenerationMixin itself), so a
+    # count > 1 here would be a regression of that idempotency fix.
     gen = [n for n in g.nodes() if str(n.get("name", "")).endswith(".generate")]
-    assert gen, "model.generate() should be captured as a model node"
-    assert all(n["kind"] == "model" for n in gen)
-    assert all(n["name"] == "GPT2LMHeadModel.generate" for n in gen)
-    assert all((n.get("meta") or {}).get("max_new_tokens") == 2 for n in gen)
+    assert len(gen) == 1
+    assert gen[0]["kind"] == "model"
+    assert gen[0]["name"] == "GPT2LMHeadModel.generate"
+    assert (gen[0].get("meta") or {}).get("max_new_tokens") == 2
