@@ -68,5 +68,5 @@ def register() -> None:
                     cap.close_span(handle)
                 except Exception:
                     pass
-    GenerationMixin._netscope_generate_wrapped = True
+    setattr(GenerationMixin, "_netscope_generate_wrapped", True)
     _installed = True
