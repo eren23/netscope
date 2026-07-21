@@ -113,20 +113,30 @@ def _kv_cache_shape(output) -> Optional[dict]:
     if pkv is None:
         return None
     try:
-        # v5 Cache object: a list of per-layer key tensors
+        # v5.12+ DynamicCache: `.layers`, each layer with `.keys` / `.values` tensors
+        layers = getattr(pkv, "layers", None)
+        if layers:
+            k0 = getattr(layers[0], "keys", None)
+            if k0 is not None:
+                return _kv_info(len(layers), k0)
+        # early v5 Cache object: a list of per-layer key tensors
         key_cache = getattr(pkv, "key_cache", None)
         if key_cache:
-            k0 = key_cache[0]
-            shape = list(k0.shape)
-            return {"layers": len(key_cache), "shape": shape, "seq": int(shape[-2])}
+            return _kv_info(len(key_cache), key_cache[0])
         # legacy: ((k, v), (k, v), ...)
         if isinstance(pkv, (tuple, list)) and pkv and isinstance(pkv[0], (tuple, list)):
-            k0 = pkv[0][0]
-            shape = list(k0.shape)
-            return {"layers": len(pkv), "shape": shape, "seq": int(shape[-2])}
+            return _kv_info(len(pkv), pkv[0][0])
     except Exception:
         return None
     return None
+
+
+def _kv_info(layers: int, k0) -> dict:
+    """KV-cache summary from a representative key tensor `k0` [b,heads,seq,head_dim].
+    Carries the cache's OWN dtype so a memory estimate uses the real element size
+    (fp16/bf16), not the module's input dtype (input_ids are int64 — a 4× lie)."""
+    shape = list(k0.shape)
+    return {"layers": layers, "shape": shape, "seq": int(shape[-2]), "dtype": _dtype(k0)}
 
 
 def _attention_weights(output):

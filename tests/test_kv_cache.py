@@ -11,15 +11,28 @@ def test_legacy_tuple_of_kv():
     v = torch.zeros(1, 8, 5, 64)
     out = {"past_key_values": ((k, v), (k, v))}
     info = _kv_cache_shape(out)
-    assert info == {"layers": 2, "shape": [1, 8, 5, 64], "seq": 5}
+    assert info == {"layers": 2, "shape": [1, 8, 5, 64], "seq": 5, "dtype": "float32"}
 
 
 def test_cache_object_with_key_cache():
-    class _Cache:                       # mimics a v5 DynamicCache
+    class _Cache:                       # mimics an early v5 DynamicCache
         key_cache = [torch.zeros(1, 8, 7, 64)]
     out = {"past_key_values": _Cache()}
     info = _kv_cache_shape(out)
     assert info["seq"] == 7 and info["shape"][-1] == 64
+
+
+def test_cache_object_with_layers_keys():
+    # transformers v5.12+ DynamicCache: .layers, each with .keys / .values tensors
+    class _Layer:
+        keys = torch.zeros(1, 8, 9, 64)
+        values = torch.zeros(1, 8, 9, 64)
+
+    class _Cache:
+        layers = [_Layer(), _Layer()]
+
+    info = _kv_cache_shape({"past_key_values": _Cache()})
+    assert info == {"layers": 2, "shape": [1, 8, 9, 64], "seq": 9, "dtype": "float32"}
 
 
 def test_no_kv_returns_none():
