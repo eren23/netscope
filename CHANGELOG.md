@@ -7,6 +7,13 @@ log records the full pre-1.0 history).
 ## [Unreleased]
 
 ### Added
+- **Memory / OOM predictor** — `netscope.memory(g, batch=32, seq=8192, vram="24GB")`
+  extrapolates the captured cost data to a target batch/seq and estimates peak GPU
+  memory, flagging OOM and the crossover seq ("fits up to seq N"). Params and
+  KV-cache are exact (the KV term dominates an LLM at long context — the usual real
+  OOM cause); activations are a linear estimate, flagged where the batch axis can't
+  be identified. `overhead`/`reserve_gb` calibration knobs for real allocator slack.
+  Pure library, offline, no key. `report.to_text()` prints the breakdown.
 - **`scope=` capture** — `netscope.graph(scope=model.layers[2])` records only that
   module and its descendants (`scope.modules()`); the full forward still runs,
   everything outside the subtree is skipped, so you get a focused graph of just
@@ -14,6 +21,11 @@ log records the full pre-1.0 history).
   unchanged (`scope=None`).
 
 ### Fixed
+- **KV-cache capture** works with **transformers v5.12+** — its `DynamicCache`
+  dropped `key_cache` for `.layers[i].keys/.values`, so `capture={"kv_cache"}`
+  silently caught nothing on current models. Now handled (and the cache's own dtype
+  is recorded, so the memory predictor uses the real element size, not int64
+  input-ids). Legacy tuple / early-v5 shapes still work.
 - **HF generate wrapper** is registered exactly once even if the module is
   re-imported (guarded on `GenerationMixin` itself, not a module-level flag), so a
   re-import can't stack the wrapper and emit a duplicate `.generate` node.

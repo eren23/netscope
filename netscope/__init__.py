@@ -77,6 +77,14 @@ def roles(graph: "NVGraph") -> dict:
     return role_counts(graph)
 
 
+def memory(graph: "NVGraph", **kwargs):
+    """Estimate peak GPU memory at a target batch/seq and flag OOM — "will it
+    fit?". Params + KV-cache are exact; activations extrapolate the captured
+    `act_bytes`. See `netscope.enrich.memory.memory` for the knobs."""
+    from netscope.enrich.memory import memory as _memory
+    return _memory(graph, **kwargs)
+
+
 __all__ = [
     "graph",
     "active_capture",
@@ -90,6 +98,7 @@ __all__ = [
     "diff_view",
     "roles",
     "timeline",
+    "memory",
     "NVGraph",
     "Capture",
     "SCHEMA_VERSION",

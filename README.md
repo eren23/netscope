@@ -132,6 +132,11 @@ is kept, never tensors.
 - **Per-layer cost** — activation + param **memory** on every node (free, derived
   from shapes); `netscope.graph(profile=True)` adds wall-**time**. A cost heatmap
   recolors nodes so the fat/slow layer pops.
+- **Will it fit?** — `netscope.memory(g, batch=32, seq=8192, vram="24GB")`
+  extrapolates that cost data to a target batch/seq and estimates **peak GPU
+  memory**, flagging OOM and the longest context that still fits. Params + KV-cache
+  are exact (KV dominates an LLM at long context); a calibration knob covers real
+  allocator slack. Offline, no key — `report.to_text()` prints the breakdown.
 - **Role lens** — color a model by architectural role (attention / MLP / norm /
   embedding) so a transformer's structure reads at a glance; `netscope.roles(g)`
   returns the breakdown.
@@ -190,6 +195,7 @@ python examples/diff_demo.py            # two model versions -> a colored diff
 python examples/profile_demo.py         # per-layer cost -> a heatmap
 python examples/roles_demo.py           # color a transformer by attention/MLP/norm
 python examples/generation_timeline_demo.py  # an autoregressive loop, step by step
+python examples/memory_demo.py          # will it fit? predict peak GPU memory + OOM
 ```
 
 ## Optional hints
