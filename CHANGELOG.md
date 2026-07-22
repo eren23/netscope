@@ -1,10 +1,12 @@
 # Changelog
 
 Notable changes to netscope. Pre-1.0 and iterating, so 0.1.x minors add features.
-**0.1.6 is the first published release** — 0.1.0–0.1.5 were internal only (this
-log records the full pre-1.0 history).
+**0.1.7 is the first published release** — 0.1.0–0.1.6 were internal only (this
+log records the full pre-1.0 history; 0.1.6 was cut but superseded before upload).
 
 ## [Unreleased]
+
+## [0.1.7] — 2026-07-22
 
 ### Added
 - **Showcase** — `python examples/showcase.py` traces 6 real architectures from
